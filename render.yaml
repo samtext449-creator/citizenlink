@@ -1,0 +1,19 @@
+services:
+  # ─────────────────────────────────────────────────────────────
+  # Customer Portal (Next.js)
+  # ─────────────────────────────────────────────────────────────
+  - type: web
+    name: citizenlink-customer
+    runtime: node
+    plan: free
+    region: frankfurt       # closest to Kenya; change to oregon/singapore if needed
+    branch: main
+    rootDir: apps/customer-portal
+    buildCommand: cd ../.. && pnpm install --frozen-lockfile && pnpm --filter customer-portal build
+    startCommand: pnpm --filter customer-portal start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: NEXT_PUBLIC_API_URL
+        value: ""             # will be filled in later when API is deployed
