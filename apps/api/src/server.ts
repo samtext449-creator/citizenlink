@@ -1,8 +1,9 @@
 ﻿import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { prisma } from './lib/database';
-import { supabase, uploadDocument } from './lib/supabase';
+import { prisma } from './lib/database.js';
+import { supabase, uploadDocument } from './lib/supabase.js';
+import kraProxyRouter from './routes/kraProxy.js';
 
 dotenv.config();
 
@@ -13,6 +14,11 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ============================================
+// KRA PROXY (forwards to XecoFlow backend)
+// ============================================
+app.use('/api/kratax', kraProxyRouter);
 
 // ============================================
 // HEALTH CHECK
@@ -255,7 +261,6 @@ app.get('/api/download/:id', async (req, res) => {
       });
     }
 
-    // Redirect to Supabase public URL
     res.json({
       success: true,
       documentUrl: request.documentUrl
@@ -296,7 +301,6 @@ app.post('/api/payment/initiate', async (req, res) => {
       });
     }
 
-    // Create payment record
     const payment = await prisma.payment.create({
       data: {
         requestId: request.id,
@@ -304,9 +308,6 @@ app.post('/api/payment/initiate', async (req, res) => {
         status: 'PENDING'
       }
     });
-
-    // Here you would integrate M-Pesa STK Push
-    // For now, just return payment details
 
     res.json({
       success: true,
@@ -327,7 +328,6 @@ app.post('/api/payment/callback', async (req, res) => {
   try {
     const { transactionCode, requestId } = req.body;
 
-    // Update payment
     const payment = await prisma.payment.update({
       where: { requestId },
       data: {
@@ -337,7 +337,6 @@ app.post('/api/payment/callback', async (req, res) => {
       }
     });
 
-    // Update request to COMPLETED
     const request = await prisma.request.update({
       where: { id: requestId },
       data: {
