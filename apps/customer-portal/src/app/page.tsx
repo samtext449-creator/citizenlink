@@ -20,6 +20,7 @@ import {
   Navigation,
   ExternalLink,
 } from 'lucide-react'
+import { getKraErrorMessage } from '@/lib/krataxErrors'
 
 // ─── Config ─────────────
 const XECOFLOW_PAY_BASE = process.env.NEXT_PUBLIC_XECOFLOW_PAY_URL || 'https://xecoflow-pay.onrender.com'
@@ -28,6 +29,7 @@ const TAXPAYER_TYPES = [
   { label: 'Kenyan Citizen', code: 'KE' },
   { label: 'Kenyan Resident', code: 'NKE' },
   { label: 'Non-Resident', code: 'NKENR' },
+  { label: 'Company', code: 'COMP' },
 ]
 
 interface PinResult {
@@ -257,13 +259,8 @@ export default function CitizenLinkAfrica() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.success) {
-        const msg = data.error ||
-          (data.code === 'KRA_INVALID_ID' ? 'This ID number was not found in KRA records.' :
-           data.code === 'KRA_TIMEOUT' ? 'KRA is taking too long to respond. Please try again.' :
-           data.code === 'RATE_LIMITED' ? 'Too many requests. Please try again in an hour.' :
-           'Could not retrieve KRA PIN. Please check the ID and try again.')
-        setPinError(msg)
-        setIsLoadingPin(false)
+        // ✅ Uses shared error mapper (consistent with the other frontend)
+        setPinError(getKraErrorMessage(data, res.status))
         return
       }
       setPinResult({
