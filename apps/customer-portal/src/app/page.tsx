@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
   ArrowRight,
   ChevronRight,
@@ -703,18 +704,39 @@ export default function CitizenLinkAfrica() {
 
       {/* ──────── FOOTER ──────── */}
       <footer className="w-full bg-slate-900 text-slate-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
+
+            {/* Left: brand + copyright */}
             <div className="flex items-center gap-3">
-              <span className="text-lg font-bold text-white">
+              <span className="text-base font-bold text-white">
                 Taxflow <span className="text-yellow-300">Africa</span>
               </span>
-              <span className="hidden sm:inline-block h-4 w-px bg-slate-700"></span>
-              <span className="text-xs text-slate-400">
+              <span className="hidden sm:inline-block h-3.5 w-px bg-slate-700"></span>
+              <span className="text-[11px] text-slate-400">
                 © {new Date().getFullYear()} All rights reserved.
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+
+            {/* Center: legal links */}
+            <nav className="flex items-center gap-3 sm:gap-4 text-[11px] sm:text-xs">
+              <Link
+                href="/terms"
+                className="text-slate-300 hover:text-white transition-colors"
+              >
+                Terms &amp; Conditions
+              </Link>
+              <span className="text-slate-700">·</span>
+              <Link
+                href="/privacy"
+                className="text-slate-300 hover:text-white transition-colors"
+              >
+                Privacy Policy
+              </Link>
+            </nav>
+
+            {/* Right: partner tagline */}
+            <p className="text-[11px] text-slate-400">
               Official KRA Ushuru Mashinani Partner.
             </p>
           </div>
