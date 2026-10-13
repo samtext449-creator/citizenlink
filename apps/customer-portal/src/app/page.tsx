@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -20,6 +21,7 @@ import {
   MapPin,
   Navigation,
   ExternalLink,
+  History,
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -40,7 +42,20 @@ interface PinResult {
   taxpayerId: string
 }
 
+interface RecentLookup {
+  pinId: string
+  taxpayerType: string
+  kraPin: string
+  taxpayerName: string
+  searchedAt: number
+}
+
+const RECENT_LOOKUPS_KEY = 'citizenlink_recent_lookups'
+const MAX_RECENT = 3
+
 export default function CitizenLinkAfrica() {
+  const searchParams = useSearchParams()
+
   const [activeCard, setActiveCard] = useState<number | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -73,6 +88,9 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
+
+  // ── Recent lookups ──
+  const [recentLookups, setRecentLookups] = useState<RecentLookup[]>([])
 
   // ── Opt-in (compact) ──
   const [optIn, setOptIn] = useState(false)
@@ -113,6 +131,17 @@ export default function CitizenLinkAfrica() {
       localStorage.setItem('citizenlink_notifications', JSON.stringify(notifications))
     }
   }, [notifications])
+
+  // ── Load recent lookups ──
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(RECENT_LOOKUPS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) setRecentLookups(parsed.slice(0, MAX_RECENT))
+      }
+    } catch (e) { console.error('Error loading recent lookups:', e) }
+  }, [])
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -171,6 +200,26 @@ export default function CitizenLinkAfrica() {
     }
     setIsLoaded(true)
   }, [])
+
+  useEffect(() => {
+    const action = searchParams.get('action')
+    const title = searchParams.get('title')
+    if (!action) return
+
+    if (action === 'find_pin') {
+      resetPinForm()
+      setShowFindPINForm(true)
+    } else if (action === 'coming_soon') {
+      setComingSoonTitle(title || 'Service')
+      setShowComingSoon(true)
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('action')
+    url.searchParams.delete('title')
+    window.history.replaceState({}, '', url.toString())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   useEffect(() => {
     if (trackingNumber) localStorage.setItem('citizenlink_last_reference', trackingNumber)
@@ -250,7 +299,47 @@ export default function CitizenLinkAfrica() {
     )
   }
 
-  // ── Fire-and-forget subscribe (mock for now) ──
+  // ── Recent lookups helpers ──
+  const saveRecentLookup = (lookup: Omit<RecentLookup, 'searchedAt'>) => {
+    setRecentLookups(prev => {
+      // Remove duplicate by pinId + taxpayerType, then prepend
+      const filtered = prev.filter(
+        l => !(l.pinId === lookup.pinId && l.taxpayerType === lookup.taxpayerType)
+      )
+      const next = [{ ...lookup, searchedAt: Date.now() }, ...filtered].slice(0, MAX_RECENT)
+      try {
+        localStorage.setItem(RECENT_LOOKUPS_KEY, JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }
+
+  const clearRecentLookups = () => {
+    setRecentLookups([])
+    try { localStorage.removeItem(RECENT_LOOKUPS_KEY) } catch {}
+  }
+
+  const reuseRecentLookup = (lookup: RecentLookup) => {
+    setPinId(lookup.pinId)
+    setTaxpayerType(lookup.taxpayerType)
+    setPinError('')
+    setShowPinResult(false)
+    setPinResult(null)
+  }
+
+  const maskPin = (pin: string) => {
+    if (!pin || pin.length <= 6) return pin
+    return pin.slice(0, 4) + '*'.repeat(Math.max(0, pin.length - 7)) + pin.slice(-3)
+  }
+
+  const formatRelativeTime = (ts: number) => {
+    const diff = Math.floor((Date.now() - ts) / 1000)
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
+  }
+
   const fireSubscribe = (identifier: string, fullName: string) => {
     if (!optIn || !subEmail.trim()) return
     setSubscribeStatus('saving')
@@ -301,6 +390,14 @@ export default function CitizenLinkAfrica() {
       }
       setPinResult(result)
       setShowPinResult(true)
+
+      // ✨ Save to recent lookups on success
+      saveRecentLookup({
+        pinId: result.taxpayerId,
+        taxpayerType: result.taxpayerType || taxpayerType,
+        kraPin: result.kraPin,
+        taxpayerName: result.taxpayerName,
+      })
 
       fireSubscribe(result.kraPin, result.taxpayerName)
     } catch (err) {
@@ -454,7 +551,6 @@ export default function CitizenLinkAfrica() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
       {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 shadow-lg w-full">
-        {/* Disclaimer Banner */}
         <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
@@ -466,7 +562,6 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
 
-        {/* Main Nav */}
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
             <div className="flex items-center flex-shrink-0">
@@ -475,7 +570,6 @@ export default function CitizenLinkAfrica() {
               </span>
             </div>
 
-            {/* Right side: Notification Bell + Mobile Menu */}
             <div className="relative flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
@@ -496,7 +590,6 @@ export default function CitizenLinkAfrica() {
                 <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </button>
 
-              {/* Notification Dropdown */}
               {isNotificationOpen && (
                 <div className="absolute right-0 top-11 sm:top-12 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                   <div className="p-3 bg-gray-50 border-b border-gray-100">
@@ -526,7 +619,6 @@ export default function CitizenLinkAfrica() {
             </div>
           </div>
 
-          {/* Mobile Menu — Services list */}
           {isMobileMenuOpen && (
             <div className="md:hidden py-3 border-t border-white/10">
               <p className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider px-2 mb-2">Our Services</p>
@@ -553,7 +645,6 @@ export default function CitizenLinkAfrica() {
           <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
 
-              {/* LEFT — Hero */}
               <div className="max-w-2xl mx-auto lg:mx-0">
                 <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-[11px] sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6">
                   <span>Official KRA Ushuru Mashinani Partner</span>
@@ -570,14 +661,14 @@ export default function CitizenLinkAfrica() {
                   </span>
                 </h1>
 
-                <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-6 sm:mb-8 leading-relaxed">
+                <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-4 sm:mb-5 leading-relaxed">
                   Fulfilling your tax obligations shouldn't be complicated. Through the{' '}
                   <span className="font-semibold text-gray-800">Ushuru Mashinani</span> initiative,
                   Taxflow Africa simplifies KRA processes so you can file returns, get your KRA PIN,
                   and stay compliant from your phone or computer.
                 </p>
 
-                <div className="space-y-2.5 sm:space-y-3 mb-4 sm:mb-6">
+                <div className="space-y-2 sm:space-y-2.5 mb-4 sm:mb-6">
                   {[
                     'Find My KRA PIN',
                     'Filing Nil, Individual & Business Returns',
@@ -597,9 +688,7 @@ export default function CitizenLinkAfrica() {
                 </div>
               </div>
 
-              {/* RIGHT — Service Cards */}
               <div className="w-full">
-                {/* Mobile list */}
                 <div className="lg:hidden">
                   <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
                     Select a service to begin:
@@ -635,7 +724,6 @@ export default function CitizenLinkAfrica() {
                   </div>
                 </div>
 
-                {/* Desktop grid */}
                 <div className="hidden lg:block">
                   <div className="mb-4 text-center">
                     <h3 className="text-base sm:text-lg font-bold text-gray-700 inline-flex items-center gap-3">
@@ -645,12 +733,8 @@ export default function CitizenLinkAfrica() {
                     </h3>
                   </div>
 
-                  {/* ✨ Upgraded service card wrapper ✨ */}
                   <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/60 rounded-3xl shadow-xl shadow-blue-200/40 ring-1 ring-blue-100/80 overflow-hidden">
-                    {/* Top accent bar */}
                     <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-
-                    {/* Soft glow accent */}
                     <div className="pointer-events-none absolute -top-24 -right-24 w-56 h-56 rounded-full bg-gradient-to-br from-blue-300/20 to-purple-300/20 blur-3xl" />
                     <div className="pointer-events-none absolute -bottom-24 -left-24 w-56 h-56 rounded-full bg-gradient-to-br from-indigo-300/20 to-sky-300/20 blur-3xl" />
 
@@ -702,45 +786,29 @@ export default function CitizenLinkAfrica() {
         </div>
       </main>
 
-      {/* ──────── FOOTER (Option A — single-line, KRA-style) ──────── */}
+      {/* ──────── FOOTER ──────── */}
       <footer className="w-full bg-slate-900 text-slate-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
-
             <span className="font-bold text-white">
               Taxflow <span className="text-yellow-300">Africa</span>
             </span>
-
             <span className="text-slate-600">|</span>
-
             <span className="text-slate-400">
               © {new Date().getFullYear()} All rights reserved.
             </span>
-
             <span className="text-slate-600">|</span>
-
-            <Link
-              href="/terms"
-              className="text-slate-300 hover:text-white transition-colors"
-            >
+            <Link href="/terms" className="text-slate-300 hover:text-white transition-colors">
               Terms &amp; Conditions
             </Link>
-
             <span className="text-slate-600">|</span>
-
-            <Link
-              href="/privacy"
-              className="text-slate-300 hover:text-white transition-colors"
-            >
+            <Link href="/privacy" className="text-slate-300 hover:text-white transition-colors">
               Privacy Policy
             </Link>
-
             <span className="text-slate-600">|</span>
-
             <span className="text-slate-400">
               Official KRA Ushuru Mashinani Partner.
             </span>
-
           </div>
         </div>
       </footer>
@@ -886,7 +954,6 @@ export default function CitizenLinkAfrica() {
             <p className="text-sm sm:text-base text-gray-500 mt-1">Retrieve your KRA PIN instantly</p>
           </div>
 
-          {/* ── Data Protection Notice (compact) ── */}
           <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
               We use your ID to retrieve your KRA PIN. Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
@@ -900,6 +967,54 @@ export default function CitizenLinkAfrica() {
               </a>
             </p>
           </div>
+
+          {/* ✨ Recent lookups — shown only when no active result and loading is idle */}
+          {!showPinResult && !isLoadingPin && recentLookups.length > 0 && (
+            <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5 text-gray-500" />
+                  <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                    Recent lookups
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearRecentLookups}
+                  className="text-[10px] text-gray-400 hover:text-red-500 underline underline-offset-2 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {recentLookups.map((lookup, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => reuseRecentLookup(lookup)}
+                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-200 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-gray-600">{i + 1}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 truncate">
+                          ID: {lookup.pinId}
+                        </p>
+                        <p className="text-[10px] text-gray-500 truncate">
+                          {maskPin(lookup.kraPin)} · {formatRelativeTime(lookup.searchedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-semibold text-blue-600 flex-shrink-0">
+                      Use →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {pinError && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
@@ -943,7 +1058,6 @@ export default function CitizenLinkAfrica() {
               </div>
             </div>
 
-            {/* Opt-in — only when not loading and no result yet */}
             {!showPinResult && !isLoadingPin && (
               <div className="pt-1">
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -989,7 +1103,6 @@ export default function CitizenLinkAfrica() {
               </div>
             )}
 
-            {/* Submit button — always visible when no result yet (disabled during loading) */}
             {!showPinResult && (
               <button
                 type="submit"
@@ -1015,7 +1128,6 @@ export default function CitizenLinkAfrica() {
             )}
           </form>
 
-          {/* ✨ Skeleton — shown while loading */}
           {isLoadingPin && !showPinResult && (
             <div className="mt-5 space-y-4 animate-pulse">
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
@@ -1037,7 +1149,6 @@ export default function CitizenLinkAfrica() {
             </div>
           )}
 
-          {/* Real result */}
           {showPinResult && pinResult && (
             <div className="mt-5 space-y-4">
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
