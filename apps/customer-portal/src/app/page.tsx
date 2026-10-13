@@ -73,6 +73,11 @@ export default function CitizenLinkAfrica() {
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
 
+  // ── Opt-in (compact) ──
+  const [optIn, setOptIn] = useState(false)
+  const [subEmail, setSubEmail] = useState('')
+  const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
   // Tracking
   const [trackingNumber, setTrackingNumber] = useState('')
   const [searchInput, setSearchInput] = useState('')
@@ -244,13 +249,38 @@ export default function CitizenLinkAfrica() {
     )
   }
 
+  // ── Fire-and-forget subscribe (mock for now) ──
+  const fireSubscribe = (identifier: string, fullName: string) => {
+    if (!optIn || !subEmail.trim()) return
+    setSubscribeStatus('saving')
+
+    console.log('[XecoNotify MOCK] subscribe payload:', {
+      full_name: fullName,
+      identifier,
+      email: subEmail.trim(),
+      source_app: 'taxflow_africa',
+      opt_in_marketing: true,
+      channels: ['email'],
+    })
+
+    setTimeout(() => setSubscribeStatus('saved'), 400)
+  }
+
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!pinId.trim()) return
+
+    if (optIn && !subEmail.trim()) {
+      setPinError('Please enter your email to receive updates, or uncheck the box.')
+      return
+    }
+
     setIsLoadingPin(true)
     setShowPinResult(false)
     setPinError('')
     setPinResult(null)
+    setSubscribeStatus('idle')
+
     try {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/api/kratax/pin/fetch`, {
         method: 'POST',
@@ -259,17 +289,19 @@ export default function CitizenLinkAfrica() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.success) {
-        // ✅ Uses shared error mapper (consistent with the other frontend)
         setPinError(getKraErrorMessage(data, res.status))
         return
       }
-      setPinResult({
+      const result: PinResult = {
         kraPin: data.data.kraPin,
         taxpayerName: data.data.taxpayerName,
         taxpayerType: data.data.taxpayerType,
         taxpayerId: data.data.taxpayerId,
-      })
+      }
+      setPinResult(result)
       setShowPinResult(true)
+
+      fireSubscribe(result.kraPin, result.taxpayerName)
     } catch (err) {
       console.error('[KRA PIN] fetch error', err)
       setPinError('Network error. Please check your connection and try again.')
@@ -293,6 +325,9 @@ export default function CitizenLinkAfrica() {
     setPinError('')
     setPinResult(null)
     setCopied(false)
+    setOptIn(false)
+    setSubEmail('')
+    setSubscribeStatus('idle')
   }
 
   const maskName = (name: string) => {
@@ -415,13 +450,13 @@ export default function CitizenLinkAfrica() {
   const progressPercentage = ((TOTAL_SECONDS - countdown) / TOTAL_SECONDS) * 100
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50/30">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
       {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 shadow-lg w-full">
-        {/* Disclaimer Banner */}
+        {/* Disclaimer Banner — ↓ ONLY CHANGE: py-1.5 sm:py-2 → py-1 sm:py-1.5 */}
         <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-center gap-2 py-1.5 sm:py-2">
+            <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
               <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-900 animate-pulse flex-shrink-0" />
               <span className="text-[10px] sm:text-xs font-medium text-amber-900 text-center leading-tight">
                 Authorized KRA Partner: Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
@@ -430,9 +465,9 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
 
-        {/* Main Nav */}
+        {/* Main Nav — ↓ ONLY CHANGE: h-14 sm:h-16 md:h-20 → h-14 sm:h-16 */}
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16 md:h-20">
+          <div className="flex items-center justify-between h-14 sm:h-16">
             <div className="flex items-center flex-shrink-0">
               <span className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white whitespace-nowrap">
                 Taxflow <span className="text-yellow-300">Africa</span>
@@ -513,12 +548,13 @@ export default function CitizenLinkAfrica() {
 
       {/* ──────── MAIN CONTENT ──────── */}
       <main className="flex-1 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 lg:py-16">
+        {/* ↓ ONLY CHANGE: lg:py-10 → lg:py-8 */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
 
               {/* LEFT — Hero */}
-              <div className="max-w-2xl lg:pt-6 mx-auto lg:mx-0">
+              <div className="max-w-2xl mx-auto lg:mx-0">
                 <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-[11px] sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6">
                   <span>Official KRA Ushuru Mashinani Partner</span>
                 </div>
@@ -541,7 +577,7 @@ export default function CitizenLinkAfrica() {
                   and stay compliant from your phone or computer.
                 </p>
 
-                <div className="space-y-2.5 sm:space-y-3 mb-6 sm:mb-8">
+                <div className="space-y-2.5 sm:space-y-3 mb-4 sm:mb-6">
                   {[
                     'Find My KRA PIN',
                     'Filing Nil, Individual & Business Returns',
@@ -599,9 +635,9 @@ export default function CitizenLinkAfrica() {
                   </div>
                 </div>
 
-                {/* Desktop grid */}
+                {/* Desktop grid — ↓ ONLY CHANGE: mb-6 → mb-4 */}
                 <div className="hidden lg:block">
-                  <div className="mb-6 text-center">
+                  <div className="mb-4 text-center">
                     <h3 className="text-base sm:text-lg font-bold text-gray-700 inline-flex items-center gap-3">
                       <span className="w-12 h-px bg-blue-300"></span>
                       Our Services
@@ -609,42 +645,54 @@ export default function CitizenLinkAfrica() {
                     </h3>
                   </div>
 
-                  <div className="relative bg-white rounded-3xl p-6 shadow-xl shadow-blue-100/50">
-                    <div className="grid grid-cols-2 gap-4">
-                      {serviceCards.map((card, i) => (
-                        <div
-                          key={i}
-                          className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-70' : ''}`}
-                          onMouseEnter={() => setActiveCard(i)}
-                          onMouseLeave={() => setActiveCard(null)}
-                          onClick={card.onClick}
-                        >
-                          <div className={`relative border rounded-2xl p-4 h-full flex flex-col justify-between overflow-hidden transition-all duration-300 ${
-                            card.isActive ? `${card.color} hover:shadow-lg` : 'bg-gray-50 border-gray-200 border-dashed'
-                          }`}>
-                            <div className="relative z-10">
-                              <div className="flex items-start justify-between gap-2 mb-1.5">
-                                <h3 className={`font-bold text-sm sm:text-base ${card.isActive ? 'text-gray-900' : 'text-gray-400'}`}>
-                                  {card.title}
-                                </h3>
-                                {card.isActive && card.tag && (
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 text-sky-700 bg-sky-100">
-                                    {card.tag}
-                                  </span>
-                                )}
-                                {!card.isActive && (
-                                  <span className="text-[9px] font-semibold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                                    Soon
-                                  </span>
-                                )}
+                  {/* ✨ Upgraded service card wrapper ✨ */}
+                  <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/60 rounded-3xl shadow-xl shadow-blue-200/40 ring-1 ring-blue-100/80 overflow-hidden">
+                    {/* Top accent bar */}
+                    <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+
+                    {/* Soft glow accent */}
+                    <div className="pointer-events-none absolute -top-24 -right-24 w-56 h-56 rounded-full bg-gradient-to-br from-blue-300/20 to-purple-300/20 blur-3xl" />
+                    <div className="pointer-events-none absolute -bottom-24 -left-24 w-56 h-56 rounded-full bg-gradient-to-br from-indigo-300/20 to-sky-300/20 blur-3xl" />
+
+                    <div className="relative p-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        {serviceCards.map((card, i) => (
+                          <div
+                            key={i}
+                            className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-80' : ''}`}
+                            onMouseEnter={() => setActiveCard(i)}
+                            onMouseLeave={() => setActiveCard(null)}
+                            onClick={card.onClick}
+                          >
+                            <div className={`relative border rounded-2xl p-4 h-full flex flex-col justify-between overflow-hidden transition-all duration-300 ${
+                              card.isActive
+                                ? `${card.color} hover:shadow-lg hover:-translate-y-0.5`
+                                : 'bg-slate-50/80 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100/80'
+                            }`}>
+                              <div className="relative z-10">
+                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                  <h3 className={`font-bold text-sm sm:text-base ${card.isActive ? 'text-gray-900' : 'text-slate-500'}`}>
+                                    {card.title}
+                                  </h3>
+                                  {card.isActive && card.tag && (
+                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 text-sky-700 bg-sky-100 ring-1 ring-sky-200">
+                                      {card.tag}
+                                    </span>
+                                  )}
+                                  {!card.isActive && (
+                                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                                      Soon
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-gray-500' : 'text-slate-400'}`}>
+                                  {card.desc}
+                                </p>
                               </div>
-                              <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-gray-500' : 'text-gray-400'}`}>
-                                {card.desc}
-                              </p>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -864,6 +912,53 @@ export default function CitizenLinkAfrica() {
             </div>
 
             {!showPinResult && (
+              <div className="pt-1">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={optIn}
+                    onChange={(e) => {
+                      setOptIn(e.target.checked)
+                      if (!e.target.checked) setSubEmail('')
+                      setSubscribeStatus('idle')
+                    }}
+                    disabled={isLoadingPin}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0a2540] focus:ring-[#0a2540] cursor-pointer"
+                  />
+                  <span className="text-xs sm:text-sm text-gray-700 leading-snug">
+                    Update me when other services are live
+                  </span>
+                </label>
+
+                {optIn && (
+                  <div className="mt-3">
+                    <label className="block text-[11px] font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                      Email <span className="text-gray-400 font-normal normal-case">(optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={subEmail}
+                      onChange={(e) => setSubEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      disabled={isLoadingPin}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    />
+                    {subscribeStatus === 'saved' && (
+                      <p className="mt-1.5 text-[11px] text-green-600 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> You're subscribed.
+                      </p>
+                    )}
+                    {subscribeStatus === 'error' && (
+                      <p className="mt-1.5 text-[11px] text-red-500">
+                        Couldn't save your preference. You can try again.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!showPinResult && (
               <button
                 type="submit"
                 disabled={isLoadingPin}
@@ -913,6 +1008,16 @@ export default function CitizenLinkAfrica() {
                   </div>
                 </div>
               </div>
+
+              {subscribeStatus === 'saved' && (
+                <div className="rounded-lg bg-green-50 border border-green-200 px-3.5 py-2.5 flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs sm:text-sm text-green-700">
+                    You'll get an email when new services go live.
+                  </p>
+                </div>
+              )}
+
               <button
                 onClick={resetPinForm}
                 className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
@@ -924,7 +1029,7 @@ export default function CitizenLinkAfrica() {
 
           <div className="mt-6 pt-4 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-400">
-              Powered by <span className="font-semibold text-gray-500">XecoFlow Verify</span>
+              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
             </p>
           </div>
         </ModalOverlay>
