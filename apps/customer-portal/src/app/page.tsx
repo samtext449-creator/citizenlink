@@ -1,7 +1,6 @@
 ﻿'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -54,8 +53,6 @@ const RECENT_LOOKUPS_KEY = 'citizenlink_recent_lookups'
 const MAX_RECENT = 3
 
 export default function CitizenLinkAfrica() {
-  const searchParams = useSearchParams()
-
   const [activeCard, setActiveCard] = useState<number | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -202,26 +199,6 @@ export default function CitizenLinkAfrica() {
   }, [])
 
   useEffect(() => {
-    const action = searchParams.get('action')
-    const title = searchParams.get('title')
-    if (!action) return
-
-    if (action === 'find_pin') {
-      resetPinForm()
-      setShowFindPINForm(true)
-    } else if (action === 'coming_soon') {
-      setComingSoonTitle(title || 'Service')
-      setShowComingSoon(true)
-    }
-
-    const url = new URL(window.location.href)
-    url.searchParams.delete('action')
-    url.searchParams.delete('title')
-    window.history.replaceState({}, '', url.toString())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
-
-  useEffect(() => {
     if (trackingNumber) localStorage.setItem('citizenlink_last_reference', trackingNumber)
   }, [trackingNumber])
 
@@ -302,7 +279,6 @@ export default function CitizenLinkAfrica() {
   // ── Recent lookups helpers ──
   const saveRecentLookup = (lookup: Omit<RecentLookup, 'searchedAt'>) => {
     setRecentLookups(prev => {
-      // Remove duplicate by pinId + taxpayerType, then prepend
       const filtered = prev.filter(
         l => !(l.pinId === lookup.pinId && l.taxpayerType === lookup.taxpayerType)
       )
