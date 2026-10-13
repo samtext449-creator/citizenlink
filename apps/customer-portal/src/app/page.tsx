@@ -453,7 +453,7 @@ export default function CitizenLinkAfrica() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
       {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 shadow-lg w-full">
-        {/* Disclaimer Banner — ↓ ONLY CHANGE: py-1.5 sm:py-2 → py-1 sm:py-1.5 */}
+        {/* Disclaimer Banner */}
         <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
@@ -465,7 +465,7 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
 
-        {/* Main Nav — ↓ ONLY CHANGE: h-14 sm:h-16 md:h-20 → h-14 sm:h-16 */}
+        {/* Main Nav */}
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
             <div className="flex items-center flex-shrink-0">
@@ -548,7 +548,6 @@ export default function CitizenLinkAfrica() {
 
       {/* ──────── MAIN CONTENT ──────── */}
       <main className="flex-1 w-full">
-        {/* ↓ ONLY CHANGE: lg:py-10 → lg:py-8 */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
@@ -635,7 +634,7 @@ export default function CitizenLinkAfrica() {
                   </div>
                 </div>
 
-                {/* Desktop grid — ↓ ONLY CHANGE: mb-6 → mb-4 */}
+                {/* Desktop grid */}
                 <div className="hidden lg:block">
                   <div className="mb-4 text-center">
                     <h3 className="text-base sm:text-lg font-bold text-gray-700 inline-flex items-center gap-3">
@@ -863,9 +862,18 @@ export default function CitizenLinkAfrica() {
             <p className="text-sm sm:text-base text-gray-500 mt-1">Retrieve your KRA PIN instantly</p>
           </div>
 
+          {/* ── Data Protection Notice (compact) ── */}
           <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-              Retrieve your KRA PIN instantly using your National ID or Passport Number. It's free and instant.
+              We use your ID to retrieve your KRA PIN. Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+              >
+                How we handle your data
+              </a>
             </p>
           </div>
 
