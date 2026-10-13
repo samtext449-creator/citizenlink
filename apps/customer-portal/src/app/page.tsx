@@ -20,7 +20,6 @@ import {
   MapPin,
   Navigation,
   ExternalLink,
-  History,
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -40,17 +39,6 @@ interface PinResult {
   taxpayerType: string
   taxpayerId: string
 }
-
-interface RecentLookup {
-  pinId: string
-  taxpayerType: string
-  kraPin: string
-  taxpayerName: string
-  searchedAt: number
-}
-
-const RECENT_LOOKUPS_KEY = 'citizenlink_recent_lookups'
-const MAX_RECENT = 3
 
 export default function CitizenLinkAfrica() {
   const [activeCard, setActiveCard] = useState<number | null>(null)
@@ -85,9 +73,6 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
-
-  // ── Recent lookups ──
-  const [recentLookups, setRecentLookups] = useState<RecentLookup[]>([])
 
   // ── Opt-in (compact) ──
   const [optIn, setOptIn] = useState(false)
@@ -128,17 +113,6 @@ export default function CitizenLinkAfrica() {
       localStorage.setItem('citizenlink_notifications', JSON.stringify(notifications))
     }
   }, [notifications])
-
-  // ── Load recent lookups ──
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(RECENT_LOOKUPS_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) setRecentLookups(parsed.slice(0, MAX_RECENT))
-      }
-    } catch (e) { console.error('Error loading recent lookups:', e) }
-  }, [])
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -276,46 +250,6 @@ export default function CitizenLinkAfrica() {
     )
   }
 
-  // ── Recent lookups helpers ──
-  const saveRecentLookup = (lookup: Omit<RecentLookup, 'searchedAt'>) => {
-    setRecentLookups(prev => {
-      const filtered = prev.filter(
-        l => !(l.pinId === lookup.pinId && l.taxpayerType === lookup.taxpayerType)
-      )
-      const next = [{ ...lookup, searchedAt: Date.now() }, ...filtered].slice(0, MAX_RECENT)
-      try {
-        localStorage.setItem(RECENT_LOOKUPS_KEY, JSON.stringify(next))
-      } catch {}
-      return next
-    })
-  }
-
-  const clearRecentLookups = () => {
-    setRecentLookups([])
-    try { localStorage.removeItem(RECENT_LOOKUPS_KEY) } catch {}
-  }
-
-  const reuseRecentLookup = (lookup: RecentLookup) => {
-    setPinId(lookup.pinId)
-    setTaxpayerType(lookup.taxpayerType)
-    setPinError('')
-    setShowPinResult(false)
-    setPinResult(null)
-  }
-
-  const maskPin = (pin: string) => {
-    if (!pin || pin.length <= 6) return pin
-    return pin.slice(0, 4) + '*'.repeat(Math.max(0, pin.length - 7)) + pin.slice(-3)
-  }
-
-  const formatRelativeTime = (ts: number) => {
-    const diff = Math.floor((Date.now() - ts) / 1000)
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
-  }
-
   const fireSubscribe = (identifier: string, fullName: string) => {
     if (!optIn || !subEmail.trim()) return
     setSubscribeStatus('saving')
@@ -366,14 +300,6 @@ export default function CitizenLinkAfrica() {
       }
       setPinResult(result)
       setShowPinResult(true)
-
-      // ✨ Save to recent lookups on success
-      saveRecentLookup({
-        pinId: result.taxpayerId,
-        taxpayerType: result.taxpayerType || taxpayerType,
-        kraPin: result.kraPin,
-        taxpayerName: result.taxpayerName,
-      })
 
       fireSubscribe(result.kraPin, result.taxpayerName)
     } catch (err) {
@@ -943,54 +869,6 @@ export default function CitizenLinkAfrica() {
               </a>
             </p>
           </div>
-
-          {/* ✨ Recent lookups — shown only when no active result and loading is idle */}
-          {!showPinResult && !isLoadingPin && recentLookups.length > 0 && (
-            <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <History className="w-3.5 h-3.5 text-gray-500" />
-                  <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
-                    Recent lookups
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={clearRecentLookups}
-                  className="text-[10px] text-gray-400 hover:text-red-500 underline underline-offset-2 transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                {recentLookups.map((lookup, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => reuseRecentLookup(lookup)}
-                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-200 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-gray-600">{i + 1}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate">
-                          ID: {lookup.pinId}
-                        </p>
-                        <p className="text-[10px] text-gray-500 truncate">
-                          {maskPin(lookup.kraPin)} · {formatRelativeTime(lookup.searchedAt)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-semibold text-blue-600 flex-shrink-0">
-                      Use →
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {pinError && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
