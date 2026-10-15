@@ -458,7 +458,7 @@ export default function CitizenLinkAfrica() {
             <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
               <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-900 animate-pulse flex-shrink-0" />
               <span className="text-[10px] sm:text-xs font-medium text-amber-900 text-center leading-tight">
-                Authorized KRA Partner: Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
+                Authorized Ushuru Mashinani Partner: Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
               </span>
             </div>
           </div>
