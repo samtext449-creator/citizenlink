@@ -656,7 +656,6 @@ export default function CitizenLinkAfrica() {
                 >
                   <div className="flex items-center justify-between px-5 h-12 border-b border-slate-100">
                     <h2 className="text-[15px] font-bold text-[#0b1140]">Free tools to try</h2>
-                    <span className="text-[12px] text-slate-500">No signup needed</span>
                   </div>
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-slate-100">
                     {freeTools.map((tool) => {
