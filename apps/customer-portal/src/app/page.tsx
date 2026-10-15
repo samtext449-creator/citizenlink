@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -15,11 +15,26 @@ import {
   Timer,
   Menu,
   AlertCircle,
-  Clock as ClockIcon,
-  Bell,
   MapPin,
   Navigation,
   ExternalLink,
+  Zap,
+  PlayCircle,
+  Shield,
+  ShieldCheck,
+  FileSearch,
+  Workflow as WorkflowIcon,
+  Database,
+  Code,
+  Link2,
+  Network,
+  Activity,
+  Send,
+  Save,
+  Check,
+  Settings,
+  LayoutGrid,
+  type LucideIcon,
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -33,6 +48,9 @@ const TAXPAYER_TYPES = [
   { label: 'Company', code: 'COMP' },
 ]
 
+const CANVAS_W = 760
+const CANVAS_H = 610
+
 interface PinResult {
   kraPin: string
   taxpayerName: string
@@ -41,14 +59,8 @@ interface PinResult {
 }
 
 export default function CitizenLinkAfrica() {
-  const [activeCard, setActiveCard] = useState<number | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
-
-  // Notifications
-  const [notifications, setNotifications] = useState<{ id: string, title: string, status: string, time: string }[]>([])
-  const [hasUnread, setHasUnread] = useState(false)
 
   // Location
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
@@ -74,7 +86,7 @@ export default function CitizenLinkAfrica() {
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // ── Opt-in (compact) ──
+  // Opt-in (compact)
   const [optIn, setOptIn] = useState(false)
   const [subEmail, setSubEmail] = useState('')
   const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -95,24 +107,6 @@ export default function CitizenLinkAfrica() {
 
   // Forms
   const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: 25 })
-
-  // Load notifications
-  useEffect(() => {
-    const savedNotifications = localStorage.getItem('citizenlink_notifications')
-    if (savedNotifications) {
-      try {
-        const parsed = JSON.parse(savedNotifications)
-        setNotifications(parsed)
-        if (parsed.some((n: any) => n.status === 'Ready')) setHasUnread(true)
-      } catch (e) { console.error('Error loading notifications:', e) }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (notifications.length > 0) {
-      localStorage.setItem('citizenlink_notifications', JSON.stringify(notifications))
-    }
-  }, [notifications])
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -151,7 +145,6 @@ export default function CitizenLinkAfrica() {
           localStorage.setItem('citizenlink_completed_state', JSON.stringify({
             trackingNumber: state.trackingNumber, completed: true, timestamp: Date.now()
           }))
-          addNotification(state.trackingNumber, 'Ready')
         }
       } catch (e) { console.error('Error restoring countdown state:', e) }
     }
@@ -165,11 +158,11 @@ export default function CitizenLinkAfrica() {
           setTrackingNumber(completedState.trackingNumber)
           setSearchInput(completedState.trackingNumber)
           setOrderStatus('Ready for Download')
-          addNotification(completedState.trackingNumber, 'Ready')
         }
       } catch (e) { console.error('Error restoring completed state:', e) }
     }
     setIsLoaded(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -201,7 +194,6 @@ export default function CitizenLinkAfrica() {
             localStorage.setItem('citizenlink_completed_state', JSON.stringify({
               trackingNumber, completed: true, timestamp: Date.now()
             }))
-            addNotification(trackingNumber, 'Ready')
             return 0
           }
           setOrderStatus(`Processing... ${formatTime(newValue)} remaining`)
@@ -210,23 +202,8 @@ export default function CitizenLinkAfrica() {
       }, 1000)
     }
     return () => { if (interval) clearInterval(interval) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCounting, countdown, trackingNumber])
-
-  const addNotification = (ref: string, status: string) => {
-    setNotifications(prev => {
-      const exists = prev.find(n => n.id === ref)
-      if (exists) return prev.map(n => n.id === ref ? { ...n, status, time: 'Just now' } : n)
-      return [{ id: ref, title: `Request ${ref}`, status, time: 'Just now' }, ...prev]
-    })
-    if (status === 'Ready') setHasUnread(true)
-  }
-
-  const handleNotificationClick = (ref: string) => {
-    setSearchInput(ref)
-    setTrackingNumber(ref)
-    setIsNotificationOpen(false)
-    handleTrackRequest(ref)
-  }
 
   const handleFindNearestCyber = () => {
     setShowNearestCyberForm(true)
@@ -340,18 +317,45 @@ export default function CitizenLinkAfrica() {
     }).join(' ')
   }
 
-  const serviceCards = [
-    { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', onClick: () => setShowFindPINForm(true), isActive: true },
-    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', color: 'bg-violet-50 border-violet-200', onClick: () => { setComingSoonTitle('Verify KRA PIN'); setShowComingSoon(true) }, isActive: false },
-    { title: 'Nil Returns Filing', desc: 'Fast annual/monthly Nil Returns submission', color: 'bg-emerald-50 border-emerald-200', onClick: () => { setComingSoonTitle('Nil Returns Filing'); setShowComingSoon(true) }, isActive: false },
-    { title: 'P9 / Employment Returns', desc: 'Annual P9 and employment income filing', color: 'bg-blue-50 border-blue-200', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
-    { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-purple-50 border-purple-200', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
-    { title: 'Rental Tax Returns', desc: 'Filing for rental income properties', color: 'bg-amber-50 border-amber-200', onClick: () => { setComingSoonTitle('Rental Tax Returns'); setShowComingSoon(true) }, isActive: false },
-    { title: 'KRA PIN Services', desc: 'New Registration & Certificate Retrieval', color: 'bg-rose-50 border-rose-200', onClick: () => { setComingSoonTitle('KRA PIN Services'); setShowComingSoon(true) }, isActive: false },
-    { title: 'Tax Compliance Certificate', desc: 'TCC application and status verification', color: 'bg-cyan-50 border-cyan-200', onClick: () => { setComingSoonTitle('Tax Compliance Certificate'); setShowComingSoon(true) }, isActive: false },
-    { title: 'iTax Profile Updates', desc: 'Change phone number, email, or password reset', color: 'bg-indigo-50 border-indigo-200', onClick: () => { setComingSoonTitle('iTax Profile Updates'); setShowComingSoon(true) }, isActive: false },
-    { title: 'eTIMS Onboarding', desc: 'System setup and assistance for traders', color: 'bg-teal-50 border-teal-200', onClick: () => { setComingSoonTitle('eTIMS Onboarding'); setShowComingSoon(true) }, isActive: false },
+  // ── Free tools (single card in the hero) ──
+  const freeTools = [
+    {
+      title: 'Find My KRA PIN',
+      tag: 'Free',
+      icon: Search,
+      isActive: true,
+      onClick: () => setShowFindPINForm(true),
+    },
+    {
+      title: 'Verify KRA PIN',
+      tag: 'Soon',
+      icon: ShieldCheck,
+      isActive: false,
+      onClick: () => { setComingSoonTitle('Verify KRA PIN'); setShowComingSoon(true) },
+    },
+    {
+      title: 'Tax Compliance Certificate',
+      tag: 'Soon',
+      icon: FileSearch,
+      isActive: false,
+      onClick: () => { setComingSoonTitle('Tax Compliance Certificate'); setShowComingSoon(true) },
+    },
+    {
+      title: 'Check My Obligations',
+      tag: 'Soon',
+      icon: FileText,
+      isActive: false,
+      onClick: () => { setComingSoonTitle('Check My Obligations'); setShowComingSoon(true) },
+    },
   ]
+
+  // ── Top nav — human, natural labels ──
+  const topNav = ['Workflows', 'Developers', 'Community', 'Resources']
+
+  const scrollToTools = () => {
+    const el = document.getElementById('free-tools')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   const handlePaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -375,7 +379,6 @@ export default function CitizenLinkAfrica() {
     localStorage.setItem('citizenlink_countdown_state', JSON.stringify({
       startTime, totalSeconds: TOTAL_SECONDS, trackingNumber: trackNo, isReady: false,
     }))
-    addNotification(trackNo, 'Processing')
     setShowSuccess(true)
   }
 
@@ -424,7 +427,6 @@ export default function CitizenLinkAfrica() {
         localStorage.setItem('citizenlink_completed_state', JSON.stringify({
           trackingNumber: searchTerm, completed: true, timestamp: Date.now()
         }))
-        addNotification(searchTerm, 'Ready')
       } else if (remainingTime > 0) {
         setOrderStatus(`Processing... ${formatTime(remainingTime)} remaining`)
         setIsCounting(true)
@@ -447,253 +449,272 @@ export default function CitizenLinkAfrica() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  const progressPercentage = ((TOTAL_SECONDS - countdown) / TOTAL_SECONDS) * 100
-
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
+    <div className="min-h-screen flex flex-col bg-white">
       {/* ──────── HEADER ──────── */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 shadow-lg w-full">
-        <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
-              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-900 animate-pulse flex-shrink-0" />
-              <span className="text-[10px] sm:text-xs font-medium text-amber-900 text-center leading-tight">
-                Authorized KRA Partner: Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
+      <header className="sticky top-0 z-50 w-full">
+        {/* Amber disclaimer */}
+        <div className="w-full bg-[#FBBF24]">
+          <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-center gap-2 py-2.5">
+              <Shield className="h-4 w-4 text-[#3b2a05] fill-[#3b2a05]/20 flex-shrink-0" />
+              <span className="text-[10px] sm:text-[13px] text-[#3b2a05] text-center leading-tight">
+                <span className="font-bold">Authorized Ushuru Mashinani Partner:</span> Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
               </span>
             </div>
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center flex-shrink-0">
-              <span className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white whitespace-nowrap">
-                Taxflow <span className="text-yellow-300">Africa</span>
-              </span>
-            </div>
+        {/* Navy nav bar */}
+        <div className="w-full bg-gradient-to-r from-[#0b1a73] via-[#1a2fb0] to-[#3548e6] shadow-lg">
+          <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
 
-            <div className="relative flex items-center gap-1 sm:gap-2">
-              <button
-                onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
-                className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-                {hasUnread && (
-                  <span className="absolute top-1 right-1 h-2 w-2 sm:h-2.5 sm:w-2.5 bg-red-500 rounded-full border-2 border-blue-600"></span>
-                )}
-              </button>
-
-              <button
-                className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                aria-label="Menu"
-              >
-                <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-              </button>
-
-              {isNotificationOpen && (
-                <div className="absolute right-0 top-11 sm:top-12 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                  <div className="p-3 bg-gray-50 border-b border-gray-100">
-                    <h4 className="font-semibold text-gray-800 text-sm">Your Requests</h4>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-gray-400 text-sm">No requests yet</div>
-                    ) : (
-                      notifications.map((n, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleNotificationClick(n.id)}
-                          className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-start gap-3"
-                        >
-                          <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'Ready' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{n.title}</p>
-                            <p className={`text-xs ${n.status === 'Ready' ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>{n.status}</p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
+              {/* Left cluster: logo + Personal/Business toggle */}
+              <div className="flex items-center gap-5 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <LogoMark className="w-9 h-7 sm:w-11 sm:h-8" gradientId="logo-nav" />
+                  <span className="text-2xl sm:text-[34px] font-extrabold tracking-tight text-white whitespace-nowrap leading-none">
+                    Taxflow <span className="text-[#3fa9ff]">Africa</span>
+                  </span>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {isMobileMenuOpen && (
-            <div className="md:hidden py-3 border-t border-white/10">
-              <p className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider px-2 mb-2">Our Services</p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {serviceCards.map((card, i) => (
+                {/* Personal / Business toggle */}
+                <div className="hidden md:inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5">
                   <button
-                    key={i}
-                    onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
-                    className="w-full text-left px-3 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-3"
+                    type="button"
+                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5] shadow-sm"
+                    aria-current="true"
                   >
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-400' : 'bg-gray-400'}`} />
-                    <span className="text-sm font-medium text-white">{card.title}</span>
+                    Business Solution
+                  </button>
+                  <Link
+                    href="/personal"
+                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white/75 hover:text-white transition-colors"
+                  >
+                    Personal
+                  </Link>
+                </div>
+              </div>
+
+              {/* Center nav — desktop */}
+              <nav className="hidden lg:flex items-center gap-8">
+                {topNav.map((label) => (
+                  <button
+                    key={label}
+                    className="text-[15px] font-medium text-white/95 hover:text-white transition-colors"
+                  >
+                    {label}
                   </button>
                 ))}
+              </nav>
+
+              {/* Right */}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="hidden sm:inline-flex items-center justify-center px-6 h-[43px] text-base font-semibold text-white border border-white/70 rounded-full cursor-not-allowed"
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="hidden sm:inline-flex items-center justify-center px-6 h-[43px] text-base font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5] rounded-full shadow-lg shadow-blue-900/30 cursor-not-allowed"
+                >
+                  Get started
+                </button>
+
+                {/* Mobile menu button */}
+                <button
+                  className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  aria-label="Menu"
+                >
+                  <Menu className="h-5 w-5 text-white" />
+                </button>
               </div>
             </div>
-          )}
+
+            {/* Mobile menu */}
+            {isMobileMenuOpen && (
+              <div className="lg:hidden py-3 border-t border-white/10">
+                {/* Personal / Business toggle — mobile */}
+                <div className="mb-3 inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5">
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5]"
+                    aria-current="true"
+                  >
+                    Personal
+                  </button>
+                  <Link
+                    href="/business"
+                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white/75"
+                  >
+                    Business
+                  </Link>
+                </div>
+
+                <nav className="grid grid-cols-1 gap-1">
+                  {topNav.map((label) => (
+                    <button
+                      key={label}
+                      className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-white hover:bg-white/10 transition-colors"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <div className="pt-2 mt-2 border-t border-white/10 flex gap-2">
+                    <button className="flex-1 px-3 py-2 rounded-full text-sm font-semibold text-white border border-white/70">
+                      Sign in
+                    </button>
+                    <button
+                      onClick={() => { setIsMobileMenuOpen(false); scrollToTools() }}
+                      className="flex-1 px-3 py-2 rounded-full text-sm font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5]"
+                    >
+                      Get started
+                    </button>
+                  </div>
+                </nav>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* ──────── MAIN CONTENT ──────── */}
-      <main className="flex-1 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
+      {/* ──────── HERO ──────── */}
+      <main className="flex-1 w-full bg-white">
+        <section className="relative overflow-hidden bg-gradient-to-b from-[#f3f6ff] via-[#f7f9ff] to-white">
+          {/* Decorative arcs */}
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -bottom-40 -left-44 w-[520px] h-[520px] rounded-full border border-blue-200/60" />
+            <div className="absolute -bottom-56 -left-56 w-[680px] h-[680px] rounded-full border border-blue-100/70" />
+            <div className="absolute -bottom-40 -right-32 w-[420px] h-[420px] rounded-full bg-gradient-to-tr from-indigo-100/60 to-transparent" />
+          </div>
 
-              <div className="max-w-2xl mx-auto lg:mx-0">
-                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-[11px] sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6">
-                  <span>Official KRA Ushuru Mashinani Partner</span>
+          <div className="relative max-w-[1550px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 lg:pt-16 pb-10 sm:pb-14">
+            <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-12 items-center transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+
+              {/* LEFT — copy */}
+              <div>
+                <div className="inline-flex items-center gap-2.5 bg-[#eaf0ff] border border-[#cddbfb] text-[#2a3bd0] text-[10px] sm:text-[11.5px] font-bold px-4 h-9 rounded-full mb-7 tracking-[0.16em] uppercase">
+                  <Zap className="w-4 h-4 fill-[#2a3bd0]" />
+                  TAX AUTOMATION SOLUTION FOR BUSINESS
                 </div>
 
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-[1.15] sm:leading-[1.1] mb-4 sm:mb-6 tracking-tight">
-                  KRA Services
+                <h1 className="text-[52px] sm:text-[68px] lg:text-[60px] xl:text-[76px] 2xl:text-[88px] font-extrabold text-[#0b1140] leading-[1.02] mb-7 tracking-[-0.045em]">
+                  Tax compliance.
                   <br />
-                  <span className="relative inline-block">
-                    <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      Brought Closer to You.
-                    </span>
-                    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-blue-600/40 via-indigo-600/40 to-purple-600/40 rounded-full blur-sm" />
+                  <span className="bg-gradient-to-r from-[#1d6bf3] via-[#4a45ee] to-[#8b3cf0] bg-clip-text text-transparent">
+                    On autopilot.
                   </span>
                 </h1>
 
-                <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-4 sm:mb-5 leading-relaxed">
-                  Fulfilling your tax obligations shouldn't be complicated. Through the{' '}
-                  <span className="font-semibold text-gray-800">Ushuru Mashinani</span> initiative,
-                  Taxflow Africa simplifies KRA processes so you can file returns, get your KRA PIN,
-                  and stay compliant from your phone or computer.
+                <p className="text-base sm:text-lg xl:text-[21px] text-[#4b5675] mb-9 leading-[1.7] max-w-[610px]">
+                  Build smarter tax workflows, connect your business systems,
+                  and simplify compliance operations — from one automation
+                  platform.
                 </p>
 
-                <div className="space-y-2 sm:space-y-2.5 mb-4 sm:mb-6">
-                  {[
-                    'Find My KRA PIN',
-                    'Filing Nil, Individual & Business Returns',
-                    'Tax Compliance Certificates (TCC)',
-                    'iTax Profile Updates (Phone & Email)',
-                    'eTIMS Onboarding & Assistance',
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm sm:text-base text-gray-700">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                        <svg className="h-3 w-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <span>{item}</span>
-                    </div>
-                  ))}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-8">
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="inline-flex items-center justify-center gap-3 bg-[#2347e6] text-white px-8 h-[58px] rounded-xl font-semibold text-base sm:text-lg shadow-lg shadow-blue-600/25 cursor-not-allowed"
+                  >
+                    <ArrowRight className="w-6 h-6" />
+                    Explore the platform
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="inline-flex items-center justify-center gap-3 bg-white/60 border border-[#3b5bf0] text-[#0b1140] px-8 h-[58px] rounded-xl font-semibold text-base sm:text-lg cursor-not-allowed"
+                  >
+                    <PlayCircle className="w-6 h-6 text-[#2347e6]" />
+                    See how it works
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:text-[15px] text-[#5d6a8a]">
+                  <span>Workflow automation</span>
+                  <span className="text-slate-400">·</span>
+                  <span>API integrations</span>
+                  <span className="text-slate-400">·</span>
+                  <span>Compliance operations</span>
+                </div>
+
+                {/* Free tools — one card */}
+                <div
+                  id="free-tools"
+                  className="mt-10 max-w-[600px] rounded-2xl border border-[#e3e9f6] bg-white shadow-[0_16px_40px_-20px_rgba(40,60,160,0.2)] overflow-hidden"
+                >
+                  <div className="flex items-center justify-between px-5 h-12 border-b border-slate-100">
+                    <h2 className="text-[15px] font-bold text-[#0b1140]">Free tools to try</h2>
+                    <span className="text-[12px] text-slate-500">No signup needed</span>
+                  </div>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-slate-100">
+                    {freeTools.map((tool) => {
+                      const Icon = tool.icon
+                      return (
+                        <li key={tool.title} className="bg-white">
+                          <button
+                            onClick={tool.onClick}
+                            className="group w-full h-full flex items-center gap-3 px-4 py-4 text-left hover:bg-slate-50 transition-colors"
+                          >
+                            <span className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              tool.isActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              <Icon className="w-[18px] h-[18px]" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block text-[14px] font-semibold leading-snug ${
+                                tool.isActive ? 'text-[#0b1140]' : 'text-slate-700'
+                              }`}>
+                                {tool.title}
+                              </span>
+                              <span className="mt-1.5 flex items-center gap-2">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                  tool.isActive ? 'text-blue-700 bg-blue-100' : 'text-slate-500 bg-slate-100'
+                                }`}>
+                                  {tool.tag}
+                                </span>
+                                <span className={`inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap ${
+                                  tool.isActive ? 'text-blue-600' : 'text-slate-400'
+                                }`}>
+                                  {tool.isActive ? 'Open tool' : 'Notify me'}
+                                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                                </span>
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </div>
               </div>
 
-              <div className="w-full">
-                <div className="lg:hidden">
-                  <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                    Select a service to begin:
-                  </p>
-                  <div className="space-y-2">
-                    {serviceCards.map((card, i) => (
-                      <button
-                        key={i}
-                        onClick={card.onClick}
-                        className={`w-full flex items-center gap-3 p-3.5 sm:p-4 rounded-xl border shadow-sm active:scale-[0.98] transition-transform ${
-                          card.isActive
-                            ? 'bg-white border-gray-200 hover:border-sky-300 hover:shadow-md'
-                            : 'bg-gray-50 border-gray-200 opacity-70'
-                        }`}
-                      >
-                        <FileText className={`h-5 w-5 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
-                        <span className={`text-sm font-semibold text-left flex-1 ${card.isActive ? 'text-gray-800' : 'text-gray-500'}`}>
-                          {card.title}
-                        </span>
-                        {card.isActive && card.tag && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 text-sky-700 bg-sky-100">
-                            {card.tag}
-                          </span>
-                        )}
-                        {!card.isActive && (
-                          <span className="text-[9px] font-semibold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                            Soon
-                          </span>
-                        )}
-                        <ChevronRight className={`h-4 w-4 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="hidden lg:block">
-                  <div className="mb-4 text-center">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-700 inline-flex items-center gap-3">
-                      <span className="w-12 h-px bg-blue-300"></span>
-                      Our Services
-                      <span className="w-12 h-px bg-blue-300"></span>
-                    </h3>
-                  </div>
-
-                  <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/60 rounded-3xl shadow-xl shadow-blue-200/40 ring-1 ring-blue-100/80 overflow-hidden">
-                    <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-                    <div className="pointer-events-none absolute -top-24 -right-24 w-56 h-56 rounded-full bg-gradient-to-br from-blue-300/20 to-purple-300/20 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-24 -left-24 w-56 h-56 rounded-full bg-gradient-to-br from-indigo-300/20 to-sky-300/20 blur-3xl" />
-
-                    <div className="relative p-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        {serviceCards.map((card, i) => (
-                          <div
-                            key={i}
-                            className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-80' : ''}`}
-                            onMouseEnter={() => setActiveCard(i)}
-                            onMouseLeave={() => setActiveCard(null)}
-                            onClick={card.onClick}
-                          >
-                            <div className={`relative border rounded-2xl p-4 h-full flex flex-col justify-between overflow-hidden transition-all duration-300 ${
-                              card.isActive
-                                ? `${card.color} hover:shadow-lg hover:-translate-y-0.5`
-                                : 'bg-slate-50/80 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100/80'
-                            }`}>
-                              <div className="relative z-10">
-                                <div className="flex items-start justify-between gap-2 mb-1.5">
-                                  <h3 className={`font-bold text-sm sm:text-base ${card.isActive ? 'text-gray-900' : 'text-slate-500'}`}>
-                                    {card.title}
-                                  </h3>
-                                  {card.isActive && card.tag && (
-                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 text-sky-700 bg-sky-100 ring-1 ring-sky-200">
-                                      {card.tag}
-                                    </span>
-                                  )}
-                                  {!card.isActive && (
-                                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                                      Soon
-                                    </span>
-                                  )}
-                                </div>
-                                <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-gray-500' : 'text-slate-400'}`}>
-                                  {card.desc}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              {/* RIGHT — workflow card */}
+              <div className="relative min-w-0">
+                <WorkflowCard />
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </main>
 
       {/* ──────── FOOTER ──────── */}
       <footer className="w-full bg-slate-900 text-slate-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
             <span className="font-bold text-white">
-              Taxflow <span className="text-yellow-300">Africa</span>
+              Taxflow <span className="text-blue-300">Africa</span>
             </span>
             <span className="text-slate-600">|</span>
             <span className="text-slate-400">
@@ -755,7 +776,7 @@ export default function CitizenLinkAfrica() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nearby Cybercafés & Print Points</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nearby Cybercafés &amp; Print Points</p>
                 {[
                   { name: 'Cyber Hub Kenya', dist: '0.3 km', address: 'Tom Mboya Street' },
                   { name: 'Digital Point Cyber', dist: '0.8 km', address: 'Moi Avenue' },
@@ -797,7 +818,7 @@ export default function CitizenLinkAfrica() {
         <ModalOverlay onClose={() => setShowComingSoon(false)} size="large">
           <div className="text-center">
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6">
-              <ClockIcon className="h-10 w-10 sm:h-12 sm:w-12 text-white" />
+              <Clock className="h-10 w-10 sm:h-12 sm:w-12 text-white" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Coming Soon!</h2>
             <p className="text-sm sm:text-base text-gray-500 mt-2">
@@ -944,12 +965,12 @@ export default function CitizenLinkAfrica() {
                     />
                     {subscribeStatus === 'saved' && (
                       <p className="mt-1.5 text-[11px] text-green-600 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> You're subscribed.
+                        <CheckCircle className="w-3 h-3" /> You&apos;re subscribed.
                       </p>
                     )}
                     {subscribeStatus === 'error' && (
                       <p className="mt-1.5 text-[11px] text-red-500">
-                        Couldn't save your preference. You can try again.
+                        Couldn&apos;t save your preference. You can try again.
                       </p>
                     )}
                   </div>
@@ -1035,7 +1056,7 @@ export default function CitizenLinkAfrica() {
                 <div className="rounded-lg bg-green-50 border border-green-200 px-3.5 py-2.5 flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
                   <p className="text-xs sm:text-sm text-green-700">
-                    You'll get an email when new services go live.
+                    You&apos;ll get an email when new services go live.
                   </p>
                 </div>
               )}
@@ -1191,7 +1212,654 @@ export default function CitizenLinkAfrica() {
   )
 }
 
-// Reusable Modal
+// ─── Logo mark (two slanted bars) ─────────────────────────────
+function LogoMark({ className, gradientId }: { className?: string, gradientId: string }) {
+  return (
+    <svg className={className} viewBox="0 0 44 32" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="32" x2="44" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#3b82f6" />
+          <stop offset="1" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      <path d="M16 2 H42 L30 15 H4 Z" fill={`url(#${gradientId})`} />
+      <path d="M14 18 H30 L24 30 H4 Z" fill={`url(#${gradientId})`} opacity="0.9" />
+    </svg>
+  )
+}
+
+// ─── Workflow card data ───────────────────────────────────────
+type RailView = 'flow' | 'runs' | 'data' | 'apps' | 'api' | 'rules' | 'templates'
+
+type FlowNode = {
+  title: string
+  subtitle: string
+  status: string
+  tone: 'ok' | 'review'
+  time: string
+  icon: LucideIcon
+}
+
+type Flow = {
+  id: string
+  tab: string
+  name: string
+  tasks: number
+  lastRun: string
+  runBase: number
+  data: [string, string][]
+  nodes: FlowNode[]
+}
+
+const FONT_STACK = "'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif"
+const FONT_URL = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
+
+const FLOW_CSS = `
+@keyframes tf-dash { to { stroke-dashoffset: -20; } }
+@keyframes tf-glow {
+  0% { box-shadow: 0 0 0 0 rgba(59,78,240,0.35); }
+  70% { box-shadow: 0 0 0 12px rgba(59,78,240,0); }
+  100% { box-shadow: 0 0 0 0 rgba(59,78,240,0); }
+}
+.tf-dash { stroke-dasharray: 6 4; animation: tf-dash 0.7s linear infinite; }
+.tf-glow { animation: tf-glow 1.4s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tf-dash, .tf-glow { animation: none; }
+}
+`
+
+const RAIL: { id: RailView; label: string; icon: LucideIcon }[] = [
+  { id: 'flow', label: 'Workflow', icon: Network },
+  { id: 'runs', label: 'Run history', icon: WorkflowIcon },
+  { id: 'data', label: 'Extracted data', icon: Database },
+  { id: 'apps', label: 'Integrations', icon: Link2 },
+  { id: 'api', label: 'API', icon: Code },
+  { id: 'rules', label: 'Rules', icon: Settings },
+  { id: 'templates', label: 'Templates', icon: LayoutGrid },
+]
+
+// Node geometry inside the 760 × 610 canvas
+const NODE_W = 244
+const NODE_H = 118
+const NODE_POS = [
+  { left: 24, top: 32 },
+  { left: 24, top: 212 },
+  { left: 316, top: 212 },
+  { left: 128, top: 448 },
+  { left: 438, top: 448 },
+]
+const STAGE_OF = [0, 1, 2, 3, 3]
+const FINAL_TICK = 4
+
+const NODE_ICON_BG = [
+  'bg-gradient-to-br from-[#6d4cf5] to-[#8b5cf6]',
+  'bg-gradient-to-br from-[#3b82f6] to-[#4f6ef7]',
+  'bg-gradient-to-br from-[#10b981] to-[#22c55e]',
+  'bg-gradient-to-br from-[#7c3aed] to-[#8b5cf6]',
+  'bg-gradient-to-br from-[#3b82f6] to-[#5b8df8]',
+]
+
+const TONE_STYLE = {
+  ok: 'bg-emerald-100 text-emerald-700',
+  review: 'bg-orange-100 text-orange-600',
+}
+
+const BLUE = '#3b4ef0'
+const VIOLET = '#7c3aed'
+const IDLE = '#cbd5e1'
+
+const SEGMENTS = [
+  { d: 'M146 158 V204', target: 0 + 1, color: BLUE, from: [146, 158], to: [146, 204] },
+  { d: 'M276 271 H308', target: 2, color: BLUE, from: [276, 271], to: [308, 271] },
+  { d: 'M438 338 V374 Q438 390 422 390 H266 Q250 390 250 406 V440', target: 3, color: BLUE, from: [438, 338], to: [250, 440] },
+  { d: 'M438 338 V374 Q438 390 454 390 H544 Q560 390 560 406 V440', target: 4, color: VIOLET, from: [438, 338], to: [560, 440] },
+]
+
+const FLOWS: Flow[] = [
+  {
+    id: 'tot',
+    tab: 'TOT',
+    name: 'Turnover Tax (TOT)',
+    tasks: 12,
+    lastRun: '2 min ago',
+    runBase: 1048,
+    data: [['Period', 'Sep 2026'], ['Invoices parsed', '38'], ['Gross sales', 'KES 1,240,000'], ['Return', 'Ready to file']],
+    nodes: [
+      { title: 'Invoice received', subtitle: 'Webhook • API', status: 'Automated', tone: 'ok', time: '2 mins ago', icon: Zap },
+      { title: 'Extract tax data', subtitle: 'Parse • Transform', status: 'Needs review', tone: 'review', time: '3 mins ago', icon: FileText },
+      { title: 'Validate details', subtitle: 'Rules • KRA checks', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: Check },
+      { title: 'Prepare return', subtitle: 'Generate • Format', status: 'Completed', tone: 'ok', time: '1 min ago', icon: FileText },
+      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Send },
+    ],
+  },
+  {
+    id: 'nil',
+    tab: 'Nil return',
+    name: 'Nil return filing',
+    tasks: 8,
+    lastRun: '4 min ago',
+    runBase: 612,
+    data: [['Period', 'Sep 2026'], ['Income declared', 'None'], ['Obligation', 'Income tax'], ['Return', 'Filed']],
+    nodes: [
+      { title: 'Nil request', subtitle: 'Form • API', status: 'Automated', tone: 'ok', time: '4 mins ago', icon: Zap },
+      { title: 'Check period', subtitle: 'Filing • Obligations', status: 'Completed', tone: 'ok', time: '4 mins ago', icon: FileSearch },
+      { title: 'Confirm nil', subtitle: 'Rules • KRA checks', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: Check },
+      { title: 'File return', subtitle: 'Submit • Confirm', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: FileText },
+      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: Send },
+    ],
+  },
+  {
+    id: 'tcc',
+    tab: 'TCC',
+    name: 'Tax compliance certificate',
+    tasks: 9,
+    lastRun: '3 min ago',
+    runBase: 327,
+    data: [['Returns checked', '12 months'], ['Late filings', '0'], ['Open balances', 'None'], ['Certificate', 'Issued']],
+    nodes: [
+      { title: 'TCC request', subtitle: 'Form • API', status: 'Automated', tone: 'ok', time: '5 mins ago', icon: Zap },
+      { title: 'Check filings', subtitle: 'Returns • Payments', status: 'Needs review', tone: 'review', time: '4 mins ago', icon: FileSearch },
+      { title: 'Validate status', subtitle: 'Rules • KRA checks', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: Check },
+      { title: 'Issue certificate', subtitle: 'Generate • Format', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: FileText },
+      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Send },
+    ],
+  },
+  {
+    id: 'pin',
+    tab: 'KRA PIN',
+    name: 'KRA PIN verification',
+    tasks: 15,
+    lastRun: '1 min ago',
+    runBase: 2210,
+    data: [['ID type', 'Kenyan Citizen'], ['ID number', '3****678'], ['KRA PIN', 'A00*****Z'], ['Match', 'Verified']],
+    nodes: [
+      { title: 'PIN submitted', subtitle: 'Form • API', status: 'Automated', tone: 'ok', time: '2 mins ago', icon: Zap },
+      { title: 'Fetch taxpayer', subtitle: 'Lookup • KRA', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: Search },
+      { title: 'Match details', subtitle: 'Name • ID', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Check },
+      { title: 'Build result', subtitle: 'Mask • Format', status: 'Completed', tone: 'ok', time: '1 min ago', icon: FileText },
+      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Send },
+    ],
+  },
+  {
+    id: 'supplier',
+    tab: 'Supplier',
+    name: 'Supplier compliance verification',
+    tasks: 11,
+    lastRun: '5 min ago',
+    runBase: 144,
+    data: [['Suppliers checked', '24'], ['PIN valid', '22'], ['TCC valid', '20'], ['Flagged', '2']],
+    nodes: [
+      { title: 'Supplier added', subtitle: 'Upload • API', status: 'Automated', tone: 'ok', time: '6 mins ago', icon: Zap },
+      { title: 'Verify PIN', subtitle: 'Lookup • KRA', status: 'Needs review', tone: 'review', time: '5 mins ago', icon: Search },
+      { title: 'Check TCC status', subtitle: 'Validity • Expiry', status: 'Completed', tone: 'ok', time: '4 mins ago', icon: Check },
+      { title: 'Build report', subtitle: 'Generate • Format', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: FileText },
+      { title: 'Send alert', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: Send },
+    ],
+  },
+]
+
+const INTEGRATIONS = [
+  { id: 'webhook', name: 'Webhook', desc: 'Receive invoices and events' },
+  { id: 'email', name: 'Email', desc: 'Send notifications' },
+  { id: 'sms', name: 'SMS', desc: 'Send text alerts' },
+  { id: 'kra', name: 'KRA checks', desc: 'Validate PINs and returns' },
+  { id: 'mpesa', name: 'M-Pesa', desc: 'Collect payments' },
+]
+
+const RULES = [
+  { id: 'autoValidate', name: 'Validate automatically', desc: 'Run KRA checks on every request' },
+  { id: 'humanReview', name: 'Hold unclear data for review', desc: 'Pause the run until someone confirms' },
+  { id: 'notifyEmail', name: 'Email on completion', desc: 'Send an email when a run finishes' },
+  { id: 'notifySms', name: 'SMS on completion', desc: 'Send a text when a run finishes' },
+]
+
+// ─── Workflow card ────────────────────────────────────────────
+function WorkflowCard() {
+  const [flowId, setFlowId] = useState(FLOWS[0].id)
+  const [view, setView] = useState<RailView>('flow')
+  const [toggles, setToggles] = useState<Record<string, boolean>>({
+    webhook: true, email: true, sms: true, kra: true, mpesa: false,
+    autoValidate: true, humanReview: true, notifyEmail: true, notifySms: false,
+  })
+  const flow = FLOWS.find((f) => f.id === flowId) ?? FLOWS[0]
+
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const update = () => setScale(Math.min(1, el.clientWidth / CANVAS_W))
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const canvasHeight = CANVAS_H * scale
+  const panelHeight = view === 'flow' ? canvasHeight : Math.max(canvasHeight, 420)
+  const toggle = (id: string) => setToggles((t) => ({ ...t, [id]: !t[id] }))
+
+  return (
+    <div
+      className="relative bg-white rounded-2xl border border-[#e3e9f6] shadow-[0_24px_60px_-20px_rgba(40,60,160,0.22)] overflow-hidden"
+      style={{ fontFamily: FONT_STACK }}
+    >
+      <link rel="stylesheet" href={FONT_URL} />
+      <style dangerouslySetInnerHTML={{ __html: FLOW_CSS }} />
+
+      {/* Card header */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 sm:px-5 py-2.5 2xl:py-0 2xl:h-[52px] border-b border-slate-100">
+        <div className="order-1 flex items-center gap-2">
+          <LogoMark className="w-7 h-5" gradientId="logo-card" />
+          <span className="text-[18px] font-extrabold text-[#0b1140] tracking-tight whitespace-nowrap">
+            Taxflow <span className="text-[#2f6bf0]">Africa</span>
+          </span>
+        </div>
+
+        {/* Flow tabs */}
+        <div
+          role="tablist"
+          aria-label="Workflow examples"
+          className="order-3 w-full 2xl:order-2 2xl:w-auto min-w-0 flex items-center gap-1 rounded-lg bg-slate-100 p-1 overflow-x-auto"
+        >
+          {FLOWS.map((f) => {
+            const active = f.id === flow.id
+            return (
+              <button
+                key={f.id}
+                role="tab"
+                aria-selected={active}
+                title={f.name}
+                onClick={() => setFlowId(f.id)}
+                className={`px-3.5 h-8 rounded-md text-[13px] font-semibold whitespace-nowrap transition-colors ${
+                  active ? 'bg-white text-[#2f5bf0] shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {f.tab}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="order-2 2xl:order-3 flex items-center gap-4">
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            Live
+          </span>
+          <button className="inline-flex items-center gap-2 px-4 h-[34px] rounded-lg bg-slate-100 text-[#1e2a4a] text-sm font-semibold">
+            <Save className="w-4 h-4" />
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* Card body */}
+      <div className="flex flex-col sm:flex-row">
+        <nav
+          aria-label="Workflow panels"
+          className="flex flex-row sm:flex-col items-center gap-2 sm:w-[60px] flex-shrink-0 px-3 py-2 sm:px-0 sm:pt-3 sm:pb-0 overflow-x-auto border-b sm:border-b-0 sm:border-r border-slate-100 bg-white"
+        >
+          {RAIL.map((item) => {
+            const Icon = item.icon
+            const active = item.id === view
+            return (
+              <button
+                key={item.id}
+                onClick={() => setView(item.id)}
+                title={item.label}
+                aria-label={item.label}
+                aria-pressed={active}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
+                  active ? 'bg-[#e4ecff] text-[#2f5bf0]' : 'text-[#5d6a8a] hover:bg-slate-100 hover:text-[#2f5bf0]'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px]" />
+              </button>
+            )
+          })}
+        </nav>
+
+        <div
+          ref={panelRef}
+          className="relative flex-1 min-w-0 overflow-hidden bg-white"
+          style={{
+            height: panelHeight,
+            backgroundImage: 'radial-gradient(circle at 1px 1px, rgb(203 213 225 / 0.55) 1px, transparent 0)',
+            backgroundSize: '20px 20px',
+          }}
+        >
+          {view === 'flow' && <FlowCanvas flow={flow} scale={scale} />}
+          {view === 'runs' && <RunsView flow={flow} />}
+          {view === 'data' && <DataView flow={flow} />}
+          {view === 'apps' && <ToggleView title="Integrations" subtitle="Connect the systems this workflow talks to" items={INTEGRATIONS} toggles={toggles} onToggle={toggle} />}
+          {view === 'api' && <ApiView flow={flow} />}
+          {view === 'rules' && <ToggleView title="Rules" subtitle="Decide how each run behaves" items={RULES} toggles={toggles} onToggle={toggle} />}
+          {view === 'templates' && (
+            <TemplatesView
+              activeId={flow.id}
+              onPick={(id) => { setFlowId(id); setView('flow') }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Animated flow canvas ─────────────────────────────────────
+function FlowCanvas({ flow, scale }: { flow: Flow; scale: number }) {
+  const [tick, setTick] = useState(0)
+  const [reduced, setReduced] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduced(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    setTick(reduced ? FINAL_TICK : 0)
+  }, [flow.id, reduced])
+
+  useEffect(() => {
+    if (reduced) return
+    const delay = tick === FINAL_TICK ? 2800 : 1400
+    const t = setTimeout(() => setTick(tick === FINAL_TICK ? 0 : tick + 1), delay)
+    return () => clearTimeout(t)
+  }, [tick, reduced])
+
+  const stateOf = (stage: number): 'pending' | 'active' | 'done' =>
+    tick > stage ? 'done' : tick === stage ? 'active' : 'pending'
+
+  const doneCount = STAGE_OF.filter((st) => tick > st).length
+  const finished = tick === FINAL_TICK
+  const tasks = flow.tasks - flow.nodes.length + doneCount
+
+  return (
+    <div className="relative" style={{ height: CANVAS_H * scale }}>
+      <div
+        className="absolute left-0 top-0"
+        style={{ width: CANVAS_W, height: CANVAS_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+      >
+        <svg className="absolute inset-0 pointer-events-none" width={CANVAS_W} height={CANVAS_H} viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} fill="none">
+          {SEGMENTS.map((seg, i) => {
+            const st = stateOf(STAGE_OF[seg.target])
+            const color = st === 'pending' ? IDLE : seg.color
+            return (
+              <g key={i}>
+                <path
+                  d={seg.d}
+                  stroke={color}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className={st === 'active' ? 'tf-dash' : undefined}
+                />
+                {[seg.from, seg.to].map(([cx, cy], k) => (
+                  <g key={k}>
+                    <circle cx={cx} cy={cy} r="6" fill={color} fillOpacity={st === 'pending' ? 0 : 0.15} />
+                    <circle cx={cx} cy={cy} r="3.5" fill={color} />
+                  </g>
+                ))}
+              </g>
+            )
+          })}
+        </svg>
+
+        {flow.nodes.map((node, i) => {
+          const Icon = node.icon
+          const st = stateOf(STAGE_OF[i])
+          const status =
+            st === 'done' ? node.status : st === 'active' ? 'Running' : 'Queued'
+          const statusStyle =
+            st === 'done' ? TONE_STYLE[node.tone] : st === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+          const time = st === 'done' ? node.time : st === 'active' ? 'In progress' : 'Waiting'
+          return (
+            <NodeCard
+              key={`${flow.id}-${i}`}
+              pos={NODE_POS[i]}
+              state={st}
+              icon={<Icon className="w-[22px] h-[22px] text-white" strokeWidth={i === 2 ? 3 : 2} />}
+              iconBg={NODE_ICON_BG[i]}
+              title={node.title}
+              subtitle={node.subtitle}
+              status={status}
+              statusStyle={statusStyle}
+              time={time}
+            />
+          )
+        })}
+
+        {/* Workflow activity panel */}
+        <div
+          className="absolute rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+          style={{ left: 524, top: 28, width: 212, height: 140 }}
+        >
+          <div className="flex items-center gap-2.5 px-4 h-[46px] bg-slate-50/70 border-b border-slate-100">
+            <Activity className="w-5 h-5 text-[#3b4ef0]" />
+            <span className="text-[15px] font-semibold text-[#0b1140]">Workflow activity</span>
+          </div>
+          <div className="px-4 pt-3.5 space-y-3.5">
+            <div className="flex items-center gap-2.5 text-[14px] text-slate-700">
+              <span className="w-[22px] h-[22px] rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                <Check className="w-3.5 h-3.5 text-white" strokeWidth={3.5} />
+              </span>
+              <span><span className="font-bold text-[#0b1140]">{tasks}</span> tasks completed</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-[14px] text-slate-600">
+              <Clock className="w-[22px] h-[22px] text-slate-400 flex-shrink-0" />
+              <span>{finished ? `Last run ${flow.lastRun}` : 'Running now…'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Workflow node card ──────────────────────────────────────
+function NodeCard({
+  pos,
+  state,
+  icon,
+  iconBg,
+  title,
+  subtitle,
+  status,
+  statusStyle,
+  time,
+}: {
+  pos: { left: number; top: number }
+  state: 'pending' | 'active' | 'done'
+  icon: React.ReactNode
+  iconBg: string
+  title: string
+  subtitle: string
+  status: string
+  statusStyle: string
+  time: string
+}) {
+  return (
+    <div
+      className={`absolute rounded-xl border bg-white px-4 py-3 transition-all duration-500 ${
+        state === 'active'
+          ? 'border-[#3b4ef0] tf-glow'
+          : 'border-[#e6ebf5] shadow-[0_4px_14px_-4px_rgba(40,60,160,0.12)]'
+      } ${state === 'pending' ? 'opacity-55' : 'opacity-100'}`}
+      style={{ left: pos.left, top: pos.top, width: NODE_W, height: NODE_H }}
+    >
+      <div className="flex items-start gap-3.5">
+        <div className={`w-11 h-11 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold text-[#0b1140] leading-5 truncate">{title}</p>
+          <p className="text-[13px] text-slate-500 leading-4 mt-0.5 truncate">{subtitle}</p>
+          <span className={`inline-flex items-center gap-1.5 mt-2 text-[12px] font-semibold px-2.5 h-6 rounded-md ${statusStyle}`}>
+            {state === 'active' && (
+              <span className="w-3 h-3 rounded-full border-2 border-blue-300 border-t-blue-700 animate-spin" />
+            )}
+            {status}
+          </span>
+          <p className="flex items-center gap-1.5 text-[12px] text-slate-500 mt-1.5 leading-4">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            {time}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Rail panels ─────────────────────────────────────────────
+function PanelShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <div className="h-full overflow-y-auto p-5">
+      <div className="mb-4">
+        <h3 className="text-[17px] font-bold text-[#0b1140] leading-tight">{title}</h3>
+        <p className="text-[13px] text-slate-500 mt-1">{subtitle}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function RunsView({ flow }: { flow: Flow }) {
+  const runs = [
+    { status: 'Completed', tone: 'ok', dur: '1m 12s', when: flow.lastRun },
+    { status: 'Completed', tone: 'ok', dur: '58s', when: '1 hr ago' },
+    { status: 'Needs review', tone: 'review', dur: '2m 04s', when: '3 hrs ago' },
+    { status: 'Completed', tone: 'ok', dur: '1m 31s', when: 'Yesterday' },
+    { status: 'Completed', tone: 'ok', dur: '1m 05s', when: 'Yesterday' },
+  ] as const
+  return (
+    <PanelShell title="Run history" subtitle={flow.name}>
+      <ul className="space-y-2.5">
+        {runs.map((r, n) => (
+          <li key={n} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <span className="font-mono text-[13px] text-slate-500 w-14">#{flow.runBase - n}</span>
+            <span className={`inline-flex items-center h-6 px-2.5 rounded-md text-[12px] font-semibold ${TONE_STYLE[r.tone]}`}>
+              {r.status}
+            </span>
+            <span className="ml-auto text-[13px] text-slate-500">{r.dur}</span>
+            <span className="w-24 text-right text-[13px] text-slate-400">{r.when}</span>
+          </li>
+        ))}
+      </ul>
+    </PanelShell>
+  )
+}
+
+function DataView({ flow }: { flow: Flow }) {
+  return (
+    <PanelShell title="Extracted data" subtitle={`${flow.name} · sample values`}>
+      <dl className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+        {flow.data.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between px-4 py-3.5">
+            <dt className="text-[14px] text-slate-500">{label}</dt>
+            <dd className="text-[14px] font-semibold text-[#0b1140]">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </PanelShell>
+  )
+}
+
+function Switch({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors ${checked ? 'bg-[#2f5bf0]' : 'bg-slate-300'}`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  )
+}
+
+function ToggleView({
+  title,
+  subtitle,
+  items,
+  toggles,
+  onToggle,
+}: {
+  title: string
+  subtitle: string
+  items: { id: string; name: string; desc: string }[]
+  toggles: Record<string, boolean>
+  onToggle: (id: string) => void
+}) {
+  return (
+    <PanelShell title={title} subtitle={subtitle}>
+      <ul className="space-y-2.5">
+        {items.map((item) => (
+          <li key={item.id} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-[#0b1140]">{item.name}</p>
+              <p className="text-[13px] text-slate-500 mt-0.5">{item.desc}</p>
+            </div>
+            <Switch checked={!!toggles[item.id]} onChange={() => onToggle(item.id)} label={item.name} />
+          </li>
+        ))}
+      </ul>
+    </PanelShell>
+  )
+}
+
+function ApiView({ flow }: { flow: Flow }) {
+  const code = `POST /v1/workflows/${flow.id}/runs
+Content-Type: application/json
+
+{
+  "source": "webhook",
+  "payload": { "taxpayer_id": "A00*****Z" }
+}
+
+// Response
+{ "run": "#${flow.runBase + 1}", "status": "running" }`
+  return (
+    <PanelShell title="API" subtitle="Example request to start this workflow">
+      <pre className="rounded-xl bg-[#0f172a] text-slate-100 text-[12.5px] leading-6 p-4 overflow-x-auto font-mono">
+        <code>{code}</code>
+      </pre>
+    </PanelShell>
+  )
+}
+
+function TemplatesView({ activeId, onPick }: { activeId: string; onPick: (id: string) => void }) {
+  return (
+    <PanelShell title="Templates" subtitle="Pick a workflow to open it on the canvas">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {FLOWS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => onPick(f.id)}
+            className={`text-left rounded-xl border px-4 py-3.5 transition-colors ${
+              f.id === activeId ? 'border-[#3b4ef0] bg-[#f3f6ff]' : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
+          >
+            <p className="text-[14px] font-semibold text-[#0b1140]">{f.name}</p>
+            <p className="text-[13px] text-slate-500 mt-0.5">{f.nodes.length} steps</p>
+          </button>
+        ))}
+      </div>
+    </PanelShell>
+  )
+}
+
+// ─── Reusable Modal ──────────────────────────────────────────
 function ModalOverlay({ children, onClose, size = 'default' }: {
   children: React.ReactNode
   onClose: () => void
