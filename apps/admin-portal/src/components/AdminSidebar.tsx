@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Activity,
@@ -14,7 +14,11 @@ import {
   Bell,
   BellOff,
 } from 'lucide-react';
-import { playNewRequestSound, prewarmAudio, isAudioUnlocked } from '@/lib/sound';
+import {
+  prewarmAudio,
+  startAlarm,
+  stopAlarm,
+} from '@/lib/sound';
 import {
   requestNotificationPermission,
   showDesktopNotification,
@@ -29,13 +33,16 @@ const API_BASE =
 const SOUND_MUTED_KEY = 'citizenlink_admin_sound_muted';
 const LAST_PENDING_KEY = 'citizenlink_admin_last_pending';
 
+// Poll every 2 seconds — gives near-instant feedback
+const POLL_INTERVAL_MS = 2_000;
+
 export default function AdminSidebar() {
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [soundMuted, setSoundMuted] = useState<boolean>(true);
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>('default');
 
-  // Load preferences
+  // ─── Load preferences ─────────────────────────────────────────
   useEffect(() => {
     try {
       const muted = localStorage.getItem(SOUND_MUTED_KEY);
@@ -52,87 +59,116 @@ export default function AdminSidebar() {
     } catch {}
   }, [soundMuted]);
 
-  // Pre-warm audio + request notification permission on mount
+  // ─── Pre-warm audio + ask notification permission ─────────────
   useEffect(() => {
     prewarmAudio();
-
-    // Wait a beat so the page is interactive, then ask for permission
     const t = setTimeout(() => {
       requestNotificationPermission().then((p) => setNotifPermission(p));
     }, 2000);
-
     return () => clearTimeout(t);
   }, []);
 
-  // Poll pending count + trigger alerts on increase
+  // ─── Stop the alarm when the user mutes ───────────────────────
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchCount = async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/v1/kratax/admin/reprints/counts`
-        );
-        const json = await res.json();
-
-        if (!cancelled && res.ok && json.success) {
-          const nextPending = Number(json.data?.pending || 0);
-          setPendingCount(nextPending);
-
-          let lastPending: number | null = null;
-          try {
-            const raw = localStorage.getItem(LAST_PENDING_KEY);
-            lastPending = raw === null ? null : Number(raw);
-          } catch {}
-
-          const grew = lastPending !== null && nextPending > lastPending;
-
-          if (!soundMuted && grew) {
-            // 1. Play sound (works if audio is unlocked)
-            playNewRequestSound();
-
-            // 2. Show desktop notification (works when tab is in background)
-            showDesktopNotification(
-              `${nextPending - (lastPending ?? 0)} new reprint request${
-                nextPending - (lastPending ?? 0) > 1 ? 's' : ''
-              }`,
-              `You have ${nextPending} pending reprint request${
-                nextPending > 1 ? 's' : ''
-              }.`,
-              {
-                tag: 'citizenlink-reprints',
-                url: '/reprints',
-                requireInteraction: true,
-              }
-            );
-          }
-
-          try {
-            localStorage.setItem(LAST_PENDING_KEY, String(nextPending));
-          } catch {}
-        }
-      } catch {}
-    };
-
-    fetchCount();
-    const id = setInterval(fetchCount, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    if (soundMuted) {
+      stopAlarm();
+    }
   }, [soundMuted]);
 
-  // Toggle sound. When unmuting, request notification permission.
+  // ─── Fetch counts (called on interval + on demand) ────────────
+  const fetchCount = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/v1/kratax/admin/reprints/counts`
+      );
+      const json = await res.json();
+
+      if (res.ok && json.success) {
+        const nextPending = Number(json.data?.pending || 0);
+        setPendingCount(nextPending);
+
+        let lastPending: number | null = null;
+        try {
+          const raw = localStorage.getItem(LAST_PENDING_KEY);
+          lastPending = raw === null ? null : Number(raw);
+        } catch {}
+
+        const grew = lastPending !== null && nextPending > lastPending;
+
+        // ─── New request arrived ────────────────────────────
+        if (!soundMuted && grew) {
+          startAlarm();
+          showDesktopNotification(
+            `${nextPending - (lastPending ?? 0)} new reprint request${
+              nextPending - (lastPending ?? 0) > 1 ? 's' : ''
+            }`,
+            `You have ${nextPending} pending reprint request${
+              nextPending > 1 ? 's' : ''
+            }.`,
+            {
+              tag: 'citizenlink-reprints',
+              url: '/reprints',
+              requireInteraction: true,
+            }
+          );
+        }
+
+        // ─── All pending resolved → stop alarm ──────────────
+        if (nextPending === 0) {
+          stopAlarm();
+        }
+
+        try {
+          localStorage.setItem(LAST_PENDING_KEY, String(nextPending));
+        } catch {}
+      }
+    } catch {
+      // silent
+    }
+  }, [soundMuted]);
+
+  // ─── Poll every 2s ────────────────────────────────────────────
+  useEffect(() => {
+    fetchCount();
+    const id = setInterval(fetchCount, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [fetchCount]);
+
+  // ─── Listen for manual "refresh now" events ───────────────────
+  useEffect(() => {
+    const handler = () => fetchCount();
+    window.addEventListener('citizenlink:refresh-counts', handler);
+    return () => window.removeEventListener('citizenlink:refresh-counts', handler);
+  }, [fetchCount]);
+
+  // ─── Toggle sound ─────────────────────────────────────────────
   const toggleSound = async () => {
     const newMuted = !soundMuted;
     setSoundMuted(newMuted);
 
     if (!newMuted) {
-      // User just unmuted — request notification permission
+      // Force-unlock audio in this user gesture
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      ctx.resume().then(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+      }).catch(() => {});
+
       const p = await requestNotificationPermission();
       setNotifPermission(p);
-      // Try to unlock audio right now (this click is a user gesture)
       prewarmAudio();
+
+      // Ring immediately if there's already pending work
+      if (pendingCount > 0) {
+        startAlarm();
+      }
+    } else {
+      stopAlarm();
     }
   };
 
@@ -161,7 +197,7 @@ export default function AdminSidebar() {
           {soundMuted ? (
             <VolumeX className="h-4 w-4 text-slate-400" />
           ) : (
-            <Volume2 className="h-4 w-4 text-emerald-400" />
+            <Volume2 className="h-4 w-4 text-emerald-400 animate-pulse" />
           )}
         </button>
       </div>
@@ -183,7 +219,7 @@ export default function AdminSidebar() {
           <FileText className="h-5 w-5 flex-shrink-0" />
           <span className="flex-1">Reprint Requests</span>
           {pendingCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-slate-900 text-[10px] font-bold">
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-slate-900 text-[10px] font-bold animate-pulse">
               {pendingCount > 99 ? '99+' : pendingCount}
             </span>
           )}
@@ -194,7 +230,6 @@ export default function AdminSidebar() {
         </Link>
       </nav>
 
-      {/* Notification status footer */}
       {!soundMuted && notifPermission === 'granted' && (
         <div className="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500 flex items-center gap-2">
           <Bell className="h-3.5 w-3.5 text-emerald-400" />

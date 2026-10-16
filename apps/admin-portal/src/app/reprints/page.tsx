@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FileText,
   Search,
@@ -28,7 +28,8 @@ import {
   type ReprintStatusFilter,
 } from '@/lib/admin-reprint-api';
 
-const AUTO_REFRESH_MS = 30_000;
+// ⚡ 2-second poll — near-instant feedback, matches the sidebar
+const AUTO_REFRESH_MS = 2_000;
 
 // ─── Payment status visuals ───────────────────────────────────────
 const PAYMENT_STATUS_CONFIG: Record<
@@ -112,7 +113,6 @@ export default function ReprintsPage() {
 
   // ─── Fetch list ───────────────────────────────────────────────
   const fetchItems = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const res = await adminReprintApi.list({
@@ -133,7 +133,7 @@ export default function ReprintsPage() {
     }
   }, [statusFilter, searchTerm]);
 
-  // ─── Fetch counts (for tab labels) ────────────────────────────
+  // ─── Fetch counts ─────────────────────────────────────────────
   const fetchCounts = useCallback(async () => {
     try {
       const c = await adminReprintApi.getCounts();
@@ -149,7 +149,7 @@ export default function ReprintsPage() {
     fetchCounts();
   }, [fetchItems, fetchCounts]);
 
-  // Auto refresh
+  // Auto refresh — every 2s
   useEffect(() => {
     if (!autoRefresh) return;
     const id = setInterval(() => {
@@ -178,6 +178,8 @@ export default function ReprintsPage() {
       });
       setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
       fetchCounts();
+      // ⚡ Instantly re-poll the sidebar so the alarm stops
+      window.dispatchEvent(new CustomEvent('citizenlink:refresh-counts'));
     } catch (err) {
       if (err instanceof AdminApiError) {
         alert(`Failed: ${err.message}`);
@@ -206,6 +208,7 @@ export default function ReprintsPage() {
       });
       setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
       fetchCounts();
+      window.dispatchEvent(new CustomEvent('citizenlink:refresh-counts'));
     } catch (err) {
       if (err instanceof AdminApiError) {
         alert(`Failed: ${err.message}`);
@@ -252,7 +255,7 @@ export default function ReprintsPage() {
                   ? 'bg-green-50 text-green-700 hover:bg-green-100'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
-              title={autoRefresh ? 'Auto-refresh on (30s)' : 'Auto-refresh paused'}
+              title={autoRefresh ? 'Auto-refresh on (2s)' : 'Auto-refresh paused'}
             >
               {autoRefresh ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
               {autoRefresh ? 'Live' : 'Paused'}
@@ -533,7 +536,7 @@ export default function ReprintsPage() {
 
           {/* Footer */}
           <div className="text-center text-[11px] text-gray-400 pt-6 pb-2">
-            {autoRefresh ? 'Auto-refreshing every 30s' : 'Auto-refresh paused'}
+            {autoRefresh ? 'Auto-refreshing every 2s' : 'Auto-refresh paused'}
             {lastUpdated && ` · ${lastUpdatedLabel}`}
           </div>
         </div>
