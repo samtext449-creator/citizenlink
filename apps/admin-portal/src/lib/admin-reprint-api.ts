@@ -1,62 +1,73 @@
 // apps/admin-portal/src/lib/admin-reprint-api.ts
 //
 // Admin API helpers for KRA PIN Reprint Requests.
-// All requests go through /v1/kratax/admin/reprints/* with x-api-key header.
+//
+// NOTE: apiKeyGuard is currently disabled on the backend, so no
+// x-api-key header is sent. Re-add ADMIN_API_KEY once the guard
+// is restored.
 
 const API_BASE =
   process.env.NEXT_PUBLIC_XECOFLOW_PAY_URL ||
   'https://xecoflow-pay.onrender.com';
 
-const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || '';
+// TODO: re-enable once apiKeyGuard is restored on the backend
+// const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || '';
 
 // ─────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────
 
-export type ReprintStatus = 'pending' | 'sent' | 'failed' | 'rejected';
-export type PaymentStatus = 'pending' | 'paid' | 'failed';
+// What the ADMIN does with a paid request
+export type FulfillmentStatus = 'pending' | 'sent' | 'rejected';
+
+// What the PAYMENT ENGINE reports about the STK push
+export type PaymentStatus = 'pending' | 'stk_sent' | 'paid' | 'failed';
+
+// Which tab the admin page is filtering by
+export type ReprintStatusFilter = 'pending' | 'sent' | 'rejected' | 'failed' | 'all';
 
 export interface ReprintRequest {
   id: string;
   correlation_id: string | null;
-  intent_id: string;
+  transaction_id: string | null;
   checkout_request_id: string | null;
 
-  // Payment
-  payment_status: PaymentStatus;
-  payment_amount: number;
-  mpesa_receipt: string | null;
-  paid_at: string | null;
-
-  // Customer (decrypted server-side)
+  // Customer
   taxpayer_name: string;
   taxpayer_id: string;
-  taxpayer_id_hash: string;
   email: string;
   payment_phone: string;
 
+  // Payment
+  payment_status: PaymentStatus;         // maps to db `status`
+  payment_amount: number;                 // maps to db `amount`
+  mpesa_receipt: string | null;
+  paid_at: string | null;
+  error_message: string | null;
+
   // Fulfillment
-  fulfillment_status: ReprintStatus;
+  fulfillment_status: FulfillmentStatus;
   sent_at: string | null;
   sent_by: string | null;
   notes: string | null;
 
   // Meta
   created_at: string;
+  updated_at: string;
   expires_at: string | null;
 }
 
 export interface ReprintCounts {
   pending: number;
   sent: number;
-  failed: number;
   rejected: number;
+  failed: number;
   total: number;
 }
 
 export interface ListReprintsParams {
-  status?: ReprintStatus | 'all';
-  search?: string;   // matches name, ID, email, receipt
+  status?: ReprintStatusFilter;
+  search?: string;
   limit?: number;
   offset?: number;
 }
@@ -96,7 +107,7 @@ async function adminFetch<T>(
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': ADMIN_API_KEY,
+      // 'x-api-key': ADMIN_API_KEY,  // disabled while guard is off
       ...(options.headers || {}),
     },
   });
@@ -120,8 +131,8 @@ async function adminFetch<T>(
 
 export const adminReprintApi = {
   /**
-   * Get counts of reprint requests by status.
-   * Used for the sidebar badge.
+   * Get counts of reprint requests by tab. Used for the sidebar
+   * badge (uses `pending`) and the tab labels.
    */
   async getCounts(): Promise<ReprintCounts> {
     return adminFetch<ReprintCounts>('/v1/kratax/admin/reprints/counts');
@@ -132,7 +143,7 @@ export const adminReprintApi = {
    */
   async list(params: ListReprintsParams = {}): Promise<ListReprintsResponse> {
     const qs = new URLSearchParams();
-    if (params.status && params.status !== 'all') qs.set('status', params.status);
+    if (params.status) qs.set('status', params.status);
     if (params.search) qs.set('search', params.search);
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.offset) qs.set('offset', String(params.offset));
@@ -169,7 +180,6 @@ export const adminReprintApi = {
 
   /**
    * Mark a reprint request as rejected.
-   * Used when the admin decides the request cannot be fulfilled.
    */
   async reject(
     id: string,
