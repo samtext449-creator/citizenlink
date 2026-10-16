@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  LayoutDashboard,
   Activity,
   AlertTriangle,
-  Settings,
   Bell,
   Search,
   CheckCircle,
@@ -17,6 +15,7 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
+import AdminSidebar from '@/components/AdminSidebar';
 
 // ─── Config ──────────────────────────────────────────────────────
 const API_BASE =
@@ -110,14 +109,11 @@ export default function AdminDashboard() {
     const q = searchTerm.trim().toLowerCase();
 
     return stats.recent.filter((row) => {
-      // Status filter
       if (statusFilter !== 'all') {
         if (statusFilter === 'success' && row.status !== 'success') return false;
         if (statusFilter === 'failure' && row.status !== 'failure') return false;
       }
-      // Type filter
       if (typeFilter !== 'all' && row.taxpayer_type !== typeFilter) return false;
-      // Search
       if (q) {
         const hay = [
           row.correlation_id,
@@ -164,7 +160,12 @@ export default function AdminDashboard() {
 
   const formatClockTime = (iso: string) => {
     const d = new Date(iso);
-    return d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    return d.toLocaleTimeString('en-KE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
   };
 
   const lastUpdatedLabel = lastUpdated
@@ -175,39 +176,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* ═══ SIDEBAR ═══ */}
-      <aside className="w-64 bg-slate-900 text-white flex-shrink-0 hidden md:flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-slate-800">
-          <span className="text-xl font-bold tracking-tight">
-            CitizenLink <span className="text-blue-400">Admin</span>
-          </span>
-        </div>
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 bg-blue-600 rounded-lg text-sm font-medium transition-colors"
-          >
-            <LayoutDashboard className="h-5 w-5" /> Dashboard
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Activity className="h-5 w-5" /> Calls
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
-          >
-            <AlertTriangle className="h-5 w-5" /> Errors
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Settings className="h-5 w-5" /> Settings
-          </a>
-        </nav>
-      </aside>
+      <AdminSidebar />
 
       {/* ═══ MAIN ═══ */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -217,7 +186,6 @@ export default function AdminDashboard() {
             System Dashboard
           </h1>
 
-          {/* Correlation ID search */}
           <div className="relative flex-1 max-w-md">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -230,7 +198,6 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Auto-refresh toggle */}
             <button
               onClick={() => setAutoRefresh((v) => !v)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -244,7 +211,6 @@ export default function AdminDashboard() {
               {autoRefresh ? 'Live' : 'Paused'}
             </button>
 
-            {/* Manual refresh */}
             <button
               onClick={fetchStats}
               disabled={statsLoading}
@@ -262,8 +228,6 @@ export default function AdminDashboard() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-
-          {/* Error banner */}
           {statsError && (
             <div className="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-3">
               <XOctagon className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -287,7 +251,6 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Today */}
               <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="h-4 w-4 text-blue-600" />
@@ -298,7 +261,6 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
-              {/* Week */}
               <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-2 mb-1">
                   <Activity className="h-4 w-4 text-indigo-600" />
@@ -309,7 +271,6 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
-              {/* Month */}
               <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="h-4 w-4 text-purple-600" />
@@ -320,7 +281,6 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
-              {/* Success Rate */}
               <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-2 mb-1">
                   <BadgeCheck className="h-4 w-4 text-emerald-600" />
@@ -355,7 +315,6 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Status filter */}
                 <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
                   {(['all', 'success', 'failure'] as const).map((s) => (
                     <button
@@ -372,7 +331,6 @@ export default function AdminDashboard() {
                   ))}
                 </div>
 
-                {/* Type filter */}
                 {availableTypes.length > 0 && (
                   <select
                     value={typeFilter}
@@ -541,7 +499,6 @@ export default function AdminDashboard() {
             </div>
           </section>
 
-          {/* Footer status line */}
           <div className="text-center text-[11px] text-gray-400 pt-4 pb-2">
             <span className="inline-flex items-center gap-1.5">
               <Clock className="h-3 w-3" />
