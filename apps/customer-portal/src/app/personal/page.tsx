@@ -1487,12 +1487,12 @@ export default function CitizenLinkAfrica() {
               <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Complete Payment</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">Pay KES 25 via M-Pesa</p>
+            <p className="text-sm sm:text-base text-gray-500 mt-2">Pay KES 1 via M-Pesa</p>
           </div>
           <form onSubmit={handlePaymentSubmit} className="space-y-5">
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
               <p className="text-sm text-gray-600">Amount to Pay</p>
-              <p className="text-3xl sm:text-4xl font-bold text-gray-900 mt-1">KES 25.00</p>
+              <p className="text-3xl sm:text-4xl font-bold text-gray-900 mt-1">KES 1.00</p>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">M-Pesa Phone Number</label>
