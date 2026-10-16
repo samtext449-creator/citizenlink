@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -20,6 +20,7 @@ import {
   MapPin,
   Navigation,
   ExternalLink,
+  Smartphone,
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -33,12 +34,27 @@ const TAXPAYER_TYPES = [
   { label: 'Company', code: 'COMP' },
 ]
 
+const REPRINT_FEE = 25
+
+// Reprint service window: 8:00 AM – 6:30 PM (local time)
+const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
+
+function isReprintWindowOpen(): boolean {
+  const now = new Date()
+  const minutesNow = now.getHours() * 60 + now.getMinutes()
+  const startMinutes = REPRINT_WINDOW.startHour * 60 + REPRINT_WINDOW.startMin
+  const endMinutes = REPRINT_WINDOW.endHour * 60 + REPRINT_WINDOW.endMin
+  return minutesNow >= startMinutes && minutesNow <= endMinutes
+}
+
 interface PinResult {
   kraPin: string
   taxpayerName: string
   taxpayerType: string
   taxpayerId: string
 }
+
+type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
 
 export default function CitizenLinkAfrica() {
   const [activeCard, setActiveCard] = useState<number | null>(null)
@@ -79,6 +95,25 @@ export default function CitizenLinkAfrica() {
   const [subEmail, setSubEmail] = useState('')
   const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
+  // ── Reprint Form ──
+  const [showReprintForm, setShowReprintForm] = useState(false)
+  const [reprintFullName, setReprintFullName] = useState('')
+  const [reprintIdOrPin, setReprintIdOrPin] = useState('')
+  const [reprintEmail, setReprintEmail] = useState('')
+  const [reprintPaymentNo, setReprintPaymentNo] = useState('')
+  const [reprintError, setReprintError] = useState('')
+
+  // ── Reprint Flow State Machine ──
+  const [reprintFlow, setReprintFlow] = useState<ReprintFlowState>('idle')
+  const [reprintPollCount, setReprintPollCount] = useState(0)
+  const [reprintSuccess, setReprintSuccess] = useState<{
+    amount: number
+    receipt: string | null
+    email: string
+  } | null>(null)
+
+  const reprintPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   // Tracking
   const [trackingNumber, setTrackingNumber] = useState('')
   const [searchInput, setSearchInput] = useState('')
@@ -95,6 +130,14 @@ export default function CitizenLinkAfrica() {
 
   // Forms
   const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: 25 })
+
+  // Cleanup on unmount
+  useEffect(
+    () => () => {
+      if (reprintPollRef.current) clearInterval(reprintPollRef.current)
+    },
+    []
+  )
 
   // Load notifications
   useEffect(() => {
@@ -317,6 +360,145 @@ export default function CitizenLinkAfrica() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // ── Reprint Form ──
+  const handleOpenReprintForm = () => {
+    if (pinResult) {
+      const parts = (pinResult.taxpayerName || '').trim().split(/\s+/)
+      const maskedName = parts.map((part, index) => {
+        if (index === 0) return part
+        if (part.length <= 1) return part
+        return part[0] + '*'.repeat(part.length - 1)
+      }).join(' ')
+
+      setReprintFullName(maskedName)
+      setReprintIdOrPin(pinResult.taxpayerId || '')
+    }
+    setReprintEmail('')
+    setReprintPaymentNo('')
+    setReprintError('')
+    setReprintFlow('idle')
+    setReprintSuccess(null)
+    setReprintPollCount(0)
+    setShowReprintForm(true)
+  }
+
+  // ── Reprint Poller ──
+  const startReprintPolling = (requestId: string) => {
+    setReprintPollCount(0)
+    if (reprintPollRef.current) clearInterval(reprintPollRef.current)
+
+    const POLL_INTERVAL_MS = 2500
+    const POLL_MAX_ATTEMPTS = 40
+
+    reprintPollRef.current = setInterval(async () => {
+      setReprintPollCount((prev) => {
+        if (prev + 1 >= POLL_MAX_ATTEMPTS && reprintPollRef.current) {
+          clearInterval(reprintPollRef.current)
+          reprintPollRef.current = null
+          setReprintFlow('error')
+          setReprintError('Payment is taking longer than expected. Check your M-Pesa messages.')
+        }
+        return prev + 1
+      })
+
+      try {
+        const res = await fetch(
+          `${XECOFLOW_PAY_BASE}/v1/kratax/reprint/status/${requestId}`
+        )
+        const data = await res.json().catch(() => ({}))
+        const status = data?.data?.status
+
+        if (status === 'paid') {
+          if (reprintPollRef.current) {
+            clearInterval(reprintPollRef.current)
+            reprintPollRef.current = null
+          }
+          setReprintSuccess({
+            amount: data.data.amount || REPRINT_FEE,
+            receipt: data.data.mpesa_receipt || null,
+            email: reprintEmail,
+          })
+          setReprintFlow('success')
+          setShowReprintForm(false)
+        } else if (status === 'failed') {
+          if (reprintPollRef.current) {
+            clearInterval(reprintPollRef.current)
+            reprintPollRef.current = null
+          }
+          setReprintFlow('error')
+          setReprintError(data.data.result_desc || 'Payment failed. Please try again.')
+        }
+      } catch {
+        // transient network error — keep polling
+      }
+    }, POLL_INTERVAL_MS)
+  }
+
+  // ── Reprint Submit ──
+  const handleReprintSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setReprintError('')
+
+    if (!reprintEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reprintEmail)) {
+      setReprintError('Please enter a valid email address.')
+      return
+    }
+
+    const cleanPayment = reprintPaymentNo.replace(/\D/g, '')
+    if (cleanPayment.length < 9) {
+      setReprintError('Please enter a valid M-Pesa payment number.')
+      return
+    }
+
+    setReprintFlow('processing')
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/reprint/initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: reprintFullName.trim(),
+          idOrPin: reprintIdOrPin.trim(),
+          email: reprintEmail.trim(),
+          paymentPhone: reprintPaymentNo.trim(),
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data?.success || !data?.data?.request_id) {
+        setReprintFlow('error')
+        setReprintError(data?.error?.message || 'Could not process the reprint request.')
+        return
+      }
+
+      const requestId = data.data.request_id
+      setReprintFlow('pending')
+      setShowReprintForm(false)
+      startReprintPolling(requestId)
+    } catch (err) {
+      console.error('[REPRINT] init error', err)
+      setReprintFlow('error')
+      setReprintError('Something went wrong. Please try again.')
+    }
+  }
+
+  const resetReprintForm = () => {
+    if (reprintPollRef.current) {
+      clearInterval(reprintPollRef.current)
+      reprintPollRef.current = null
+    }
+    setShowReprintForm(false)
+    setReprintFullName('')
+    setReprintIdOrPin('')
+    setReprintEmail('')
+    setReprintPaymentNo('')
+    setReprintError('')
+    setReprintFlow('idle')
+    setReprintSuccess(null)
+    setReprintPollCount(0)
+  }
+
   const resetPinForm = () => {
     setPinId('')
     setTaxpayerType('KE')
@@ -328,6 +510,7 @@ export default function CitizenLinkAfrica() {
     setOptIn(false)
     setSubEmail('')
     setSubscribeStatus('idle')
+    resetReprintForm()
   }
 
   const maskName = (name: string) => {
@@ -1040,6 +1223,114 @@ export default function CitizenLinkAfrica() {
                 </div>
               )}
 
+              {/* Reprint Flow — Pending */}
+              {reprintFlow === 'pending' && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
+                  <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-200">
+                    <Smartphone className="h-7 w-7 animate-pulse text-amber-600" />
+                  </div>
+                  <p className="mt-4 text-[15px] font-bold text-amber-900">Waiting for confirmation</p>
+                  <p className="mt-1 text-[11.5px] text-amber-700">
+                    Check your phone and enter your M-Pesa PIN for KES {REPRINT_FEE}.
+                  </p>
+                  <p className="mt-2 text-[11px] text-amber-700/80">
+                    {(reprintPollCount * 2.5).toFixed(0)}s elapsed
+                  </p>
+
+                  <div className="mt-5 space-y-2.5 text-left">
+                    {['Request sent to your phone', 'Enter your PIN', 'Confirming with M-Pesa'].map((label, idx) => {
+                      const active = reprintPollCount < 1 ? 0 : reprintPollCount < 3 ? 1 : 2
+                      const done = idx < active
+                      const current = idx === active
+                      return (
+                        <div key={label} className="flex items-center gap-2.5">
+                          <div className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
+                            done ? 'bg-emerald-500' : current ? 'bg-amber-500' : 'bg-amber-200'
+                          }`}>
+                            {done ? (
+                              <CheckCircle className="h-3 w-3 text-white" />
+                            ) : current ? (
+                              <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+                            ) : null}
+                          </div>
+                          <span className={`text-[12.5px] ${
+                            idx <= active ? 'font-medium text-amber-900' : 'text-amber-700/70'
+                          }`}>
+                            {label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <button
+                    onClick={resetReprintForm}
+                    className="mt-4 text-[11.5px] font-medium text-amber-800 underline underline-offset-2"
+                  >
+                    I didn&apos;t receive a prompt — start over
+                  </button>
+                </div>
+              )}
+
+              {/* Reprint Flow — Success */}
+              {reprintFlow === 'success' && reprintSuccess && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
+                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100">
+                    <CheckCircle className="h-7 w-7 text-emerald-600" />
+                  </div>
+                  <p className="mt-3 text-[17px] font-bold text-emerald-900">Payment Successful</p>
+                  <p className="mt-1.5 text-[12.5px] text-emerald-700">
+                    KES {reprintSuccess.amount} paid for certificate reprint
+                  </p>
+                  {reprintSuccess.receipt && (
+                    <p className="mt-1 text-[11px] font-mono text-emerald-700">
+                      Receipt: {reprintSuccess.receipt}
+                    </p>
+                  )}
+                  <p className="mt-3 text-[12px] text-emerald-800">
+                    Your certificate will be sent to{' '}
+                    <span className="font-semibold">{reprintSuccess.email}</span>
+                  </p>
+
+                  <button
+                    onClick={resetReprintForm}
+                    className="mt-5 w-full h-10 rounded-lg bg-emerald-700 text-white text-[13px] font-semibold hover:bg-emerald-800 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+
+              {/* Reprint Flow — Error */}
+              {reprintFlow === 'error' && reprintError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-bold text-red-800">Payment Failed</p>
+                      <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintError}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={resetReprintForm}
+                    className="mt-3 h-9 rounded-lg bg-red-600 px-4 text-[12px] font-semibold text-white hover:bg-red-700"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              )}
+
+              {/* Reprint KRA Certificate button — only when idle + within window */}
+              {reprintFlow === 'idle' && isReprintWindowOpen() && (
+                <button
+                  onClick={handleOpenReprintForm}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-100"
+                >
+                  <Download className="w-4 h-4" />
+                  Reprint KRA Certificate
+                </button>
+              )}
+
               <button
                 onClick={resetPinForm}
                 className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
@@ -1054,6 +1345,136 @@ export default function CitizenLinkAfrica() {
               Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
             </p>
           </div>
+        </ModalOverlay>
+      )}
+
+      {/* ════════════ REPRINT FORM ════════════ */}
+      {showReprintForm && (
+        <ModalOverlay onClose={() => { setShowReprintForm(false); resetReprintForm() }} size="compact">
+          {/* Header */}
+          <div className="mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-md flex-shrink-0">
+                <FileText className="w-4 h-4 text-white" />
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                KRA PIN Reprint Form
+              </h2>
+            </div>
+            <p className="text-[11px] sm:text-xs text-gray-500 leading-relaxed mt-2">
+              Fill details below. PDF will be shared to your email.
+            </p>
+          </div>
+
+          {/* Section Header */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-full px-3 py-1.5 mb-4 inline-block">
+            <p className="text-[10px] font-bold text-white uppercase tracking-wider">
+              KRA PIN Reprint Details
+            </p>
+          </div>
+
+          {/* Error */}
+          {reprintError && (
+            <div className="mb-3 rounded-lg bg-red-50 border border-red-200 p-2.5 flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700">{reprintError}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleReprintSubmit} className="space-y-3">
+            {/* Full Name — READ ONLY (masked) */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={reprintFullName}
+                readOnly
+                placeholder="Enter full name"
+                className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder-gray-400 cursor-not-allowed text-sm"
+              />
+            </div>
+
+            {/* National ID or KRA PIN — READ ONLY */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                National ID or KRA PIN
+              </label>
+              <input
+                type="text"
+                value={reprintIdOrPin}
+                readOnly
+                placeholder="Enter National ID or KRA PIN"
+                className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder-gray-400 cursor-not-allowed text-sm"
+              />
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={reprintEmail}
+                onChange={(e) => setReprintEmail(e.target.value)}
+                placeholder="Enter email address"
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-sm"
+              />
+            </div>
+
+            {/* Payment No */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Payment No
+              </label>
+              <input
+                type="tel"
+                required
+                value={reprintPaymentNo}
+                onChange={(e) => setReprintPaymentNo(e.target.value)}
+                placeholder="e.g. 07XXXXXXXX"
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-sm"
+              />
+              <p className="mt-1 text-[10px] text-gray-500">
+                M-Pesa number that will receive the STK push prompt.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowReprintForm(false); resetReprintForm() }}
+                className="flex-1 bg-white border-2 border-blue-500 text-blue-600 hover:bg-blue-50 font-bold text-sm py-2.5 rounded-lg transition-all"
+              >
+                Close
+              </button>
+              <button
+                type="submit"
+                disabled={reprintFlow === 'processing'}
+                className={`flex-1 font-bold text-sm py-2.5 rounded-lg transition-all shadow-md flex items-center justify-center gap-2 ${
+                  reprintFlow === 'processing'
+                    ? 'bg-blue-400 text-white cursor-wait'
+                    : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white'
+                }`}
+              >
+                {reprintFlow === 'processing' ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Sending request…
+                  </>
+                ) : (
+                  <>Pay Ksh {REPRINT_FEE} &amp; Submit</>
+                )}
+              </button>
+            </div>
+          </form>
         </ModalOverlay>
       )}
 
@@ -1195,13 +1616,16 @@ export default function CitizenLinkAfrica() {
 function ModalOverlay({ children, onClose, size = 'default' }: {
   children: React.ReactNode
   onClose: () => void
-  size?: 'default' | 'large'
+  size?: 'default' | 'large' | 'compact'
 }) {
-  const maxWidth = size === 'large' ? 'max-w-lg sm:max-w-2xl' : 'max-w-sm sm:max-w-md'
+  const maxWidth =
+    size === 'large' ? 'max-w-lg sm:max-w-2xl' :
+    size === 'compact' ? 'max-w-sm sm:max-w-md' :
+    'max-w-sm sm:max-w-md'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-5 sm:p-8 md:p-10 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
+      <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-4 sm:p-6 md:p-7 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
         <button
           onClick={onClose}
           className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl p-2 transition-all z-10"
