@@ -1,43 +1,68 @@
 // apps/admin-portal/src/lib/sound.ts
-//
-// Small Web Audio API helper — plays short notification sounds
-// without needing any binary asset files.
-//
 
 let audioCtx: AudioContext | null = null;
+let unlockInstalled = false;
+let unlocked = false;
 
-function getCtx(): AudioContext | null {
+function createCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    try {
-      const Ctor = window.AudioContext || (window as any).webkitAudioContext;
-      audioCtx = new Ctor();
-    } catch {
-      return null;
-    }
+  if (audioCtx) return audioCtx;
+  try {
+    const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+    audioCtx = new Ctor();
+    return audioCtx;
+  } catch {
+    return null;
   }
-  return audioCtx;
 }
 
-/**
- * Plays a two-tone "ding" (like Slack / Teams notification).
- * No-op on the server or if AudioContext is unavailable.
- */
+export function unlockAudio(): void {
+  const ctx = createCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume()
+      .then(() => { unlocked = ctx.state === 'running'; })
+      .catch(() => {});
+  } else {
+    unlocked = ctx.state === 'running';
+  }
+}
+
+function installUnlockListeners(): void {
+  if (typeof window === 'undefined') return;
+  if (unlockInstalled) return;
+  unlockInstalled = true;
+
+  const onGesture = () => {
+    unlockAudio();
+    window.removeEventListener('click', onGesture);
+    window.removeEventListener('keydown', onGesture);
+    window.removeEventListener('touchstart', onGesture);
+  };
+
+  window.addEventListener('click', onGesture, { once: true, passive: true });
+  window.addEventListener('keydown', onGesture, { once: true, passive: true });
+  window.addEventListener('touchstart', onGesture, { once: true, passive: true });
+}
+
+if (typeof window !== 'undefined') {
+  installUnlockListeners();
+}
+
 export function playNewRequestSound(): void {
-  const ctx = getCtx();
+  const ctx = createCtx();
   if (!ctx) return;
 
-  // Resume if browser suspended it (autoplay policy)
+  // Best-effort resume — if it's already unlocked this is a no-op
   if (ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
   }
 
   const now = ctx.currentTime;
-
-  // Two-tone chime: high → slightly lower
   const tones = [
-    { freq: 880, start: 0,    dur: 0.12 },
-    { freq: 660, start: 0.10, dur: 0.18 },
+    { freq: 880, start: 0,    dur: 0.15 },
+    { freq: 660, start: 0.13, dur: 0.22 },
+    { freq: 880, start: 0.28, dur: 0.15 },
   ];
 
   tones.forEach(({ freq, start, dur }) => {
@@ -47,9 +72,8 @@ export function playNewRequestSound(): void {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, now + start);
 
-    // Envelope: quick attack, smooth decay
     gain.gain.setValueAtTime(0, now + start);
-    gain.gain.linearRampToValueAtTime(0.15, now + start + 0.01);
+    gain.gain.linearRampToValueAtTime(0.25, now + start + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
 
     osc.connect(gain);
@@ -60,29 +84,10 @@ export function playNewRequestSound(): void {
   });
 }
 
-/**
- * Softer, single-tone "pop" for less-urgent events.
- */
-export function playSoftPop(): void {
-  const ctx = getCtx();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+export function prewarmAudio(): void {
+  installUnlockListeners();
+}
 
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(500, now);
-  osc.frequency.exponentialRampToValueAtTime(250, now + 0.15);
-
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.1, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-
-  osc.start(now);
-  osc.stop(now + 0.2);
+export function isAudioUnlocked(): boolean {
+  return unlocked || (audioCtx?.state === 'running');
 }
