@@ -34,7 +34,8 @@ const TAXPAYER_TYPES = [
   { label: 'Company', code: 'COMP' },
 ]
 
-const REPRINT_FEE = 25
+const REPRINT_FEE = 1
+
 
 // Reprint service window: 8:00 AM – 6:30 PM (local time)
 const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
@@ -129,7 +130,7 @@ export default function CitizenLinkAfrica() {
   const [countdownStartTime, setCountdownStartTime] = useState<number | null>(null)
 
   // Forms
-  const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: 25 })
+  const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: 1 })
 
   // Cleanup on unmount
   useEffect(
