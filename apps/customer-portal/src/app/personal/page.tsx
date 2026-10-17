@@ -34,7 +34,7 @@ const TAXPAYER_TYPES = [
   { label: 'Company', code: 'COMP' },
 ]
 
-const REPRINT_FEE = 1
+const REPRINT_FEE = 25
 
 
 // Reprint service window: 8:00 AM – 6:30 PM (local time)
