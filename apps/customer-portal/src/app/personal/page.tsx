@@ -36,7 +36,6 @@ const TAXPAYER_TYPES = [
 
 const REPRINT_FEE = 25
 
-
 // Reprint service window: 8:00 AM – 6:30 PM (local time)
 const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
 
@@ -91,6 +90,9 @@ export default function CitizenLinkAfrica() {
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
 
+  // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
+  const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
+
   // ── Opt-in (compact) ──
   const [optIn, setOptIn] = useState(false)
   const [subEmail, setSubEmail] = useState('')
@@ -103,6 +105,11 @@ export default function CitizenLinkAfrica() {
   const [reprintEmail, setReprintEmail] = useState('')
   const [reprintPaymentNo, setReprintPaymentNo] = useState('')
   const [reprintError, setReprintError] = useState('')
+
+  // ── Reprint-only form (KRA PIN mode) ──
+  const [reprintOnlyEmail, setReprintOnlyEmail] = useState('')
+  const [reprintOnlyPaymentNo, setReprintOnlyPaymentNo] = useState('')
+  const [reprintOnlyError, setReprintOnlyError] = useState('')
 
   // ── Reprint Flow State Machine ──
   const [reprintFlow, setReprintFlow] = useState<ReprintFlowState>('idle')
@@ -130,7 +137,7 @@ export default function CitizenLinkAfrica() {
   const [countdownStartTime, setCountdownStartTime] = useState<number | null>(null)
 
   // Forms
-  const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: 1 })
+  const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: REPRINT_FEE })
 
   // Cleanup on unmount
   useEffect(
@@ -354,6 +361,58 @@ export default function CitizenLinkAfrica() {
     }
   }
 
+  // ── KRA PIN mode: skip fetch, send request directly to admin ──
+  const handlePinModeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setReprintOnlyError('')
+
+    const cleanPin = pinId.trim().toUpperCase()
+    if (!cleanPin || cleanPin.length < 10) {
+      setReprintOnlyError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+    if (!reprintOnlyEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reprintOnlyEmail)) {
+      setReprintOnlyError('Please enter a valid email address.')
+      return
+    }
+    const cleanPhone = reprintOnlyPaymentNo.replace(/\D/g, '')
+    if (cleanPhone.length < 9) {
+      setReprintOnlyError('Please enter a valid M-Pesa payment number.')
+      return
+    }
+
+    setReprintFlow('processing')
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/reprint/initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: 'KRA PIN Customer',
+          idOrPin: cleanPin,
+          email: reprintOnlyEmail.trim(),
+          paymentPhone: reprintOnlyPaymentNo.trim(),
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data?.success || !data?.data?.request_id) {
+        setReprintFlow('error')
+        setReprintOnlyError(data?.error?.message || 'Could not process the reprint request.')
+        return
+      }
+
+      const requestId = data.data.request_id
+      setReprintFlow('pending')
+      startReprintPolling(requestId)
+    } catch (err) {
+      console.error('[REPRINT-PIN] init error', err)
+      setReprintFlow('error')
+      setReprintOnlyError('Something went wrong. Please try again.')
+    }
+  }
+
   const handleCopyPin = () => {
     if (!pinResult) return
     navigator.clipboard.writeText(pinResult.kraPin)
@@ -398,6 +457,7 @@ export default function CitizenLinkAfrica() {
           reprintPollRef.current = null
           setReprintFlow('error')
           setReprintError('Payment is taking longer than expected. Check your M-Pesa messages.')
+          setReprintOnlyError('Payment is taking longer than expected. Check your M-Pesa messages.')
         }
         return prev + 1
       })
@@ -417,7 +477,7 @@ export default function CitizenLinkAfrica() {
           setReprintSuccess({
             amount: data.data.amount || REPRINT_FEE,
             receipt: data.data.mpesa_receipt || null,
-            email: reprintEmail,
+            email: lookupMode === 'pin' ? reprintOnlyEmail : reprintEmail,
           })
           setReprintFlow('success')
           setShowReprintForm(false)
@@ -427,7 +487,9 @@ export default function CitizenLinkAfrica() {
             reprintPollRef.current = null
           }
           setReprintFlow('error')
-          setReprintError(data.data.result_desc || 'Payment failed. Please try again.')
+          const failMsg = data.data.result_desc || 'Payment failed. Please try again.'
+          setReprintError(failMsg)
+          setReprintOnlyError(failMsg)
         }
       } catch {
         // transient network error — keep polling
@@ -435,7 +497,7 @@ export default function CitizenLinkAfrica() {
     }, POLL_INTERVAL_MS)
   }
 
-  // ── Reprint Submit ──
+  // ── Reprint Submit (ID mode) ──
   const handleReprintSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setReprintError('')
@@ -511,6 +573,11 @@ export default function CitizenLinkAfrica() {
     setOptIn(false)
     setSubEmail('')
     setSubscribeStatus('idle')
+    setReprintOnlyEmail('')
+    setReprintOnlyPaymentNo('')
+    setReprintOnlyError('')
+    setReprintFlow('idle')
+    setLookupMode('id')
     resetReprintForm()
   }
 
@@ -630,8 +697,6 @@ export default function CitizenLinkAfrica() {
     const secs = seconds % 60
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
-
-  const progressPercentage = ((TOTAL_SECONDS - countdown) / TOTAL_SECONDS) * 100
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
@@ -1037,12 +1102,12 @@ export default function CitizenLinkAfrica() {
               <Search className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Find My KRA PIN</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-1">Retrieve your KRA PIN instantly</p>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">Retrieve your KRA PIN or request a certificate</p>
           </div>
 
           <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-              We use your ID to retrieve your KRA PIN. Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
               <a
                 href="/privacy"
                 target="_blank"
@@ -1054,179 +1119,382 @@ export default function CitizenLinkAfrica() {
             </p>
           </div>
 
-          {pinError && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{pinError}</p>
-            </div>
-          )}
-
-          <form className="space-y-4" onSubmit={handlePinSubmit}>
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-                ID / PASSPORT NUMBER <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={pinId}
-                onChange={(e) => setPinId(e.target.value)}
-                placeholder="e.g. 12345678"
-                disabled={isLoadingPin || showPinResult}
-                className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-1.5">TAXPAYER TYPE</label>
-              <div className="relative">
-                <select
-                  value={taxpayerType}
-                  onChange={(e) => setTaxpayerType(e.target.value)}
-                  disabled={isLoadingPin || showPinResult}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 appearance-none focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {TAXPAYER_TYPES.map((t) => (
-                    <option key={t.code} value={t.code}>{t.label}</option>
-                  ))}
-                </select>
-                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                  <ChevronRight className="w-4 h-4 rotate-90" />
-                </div>
-              </div>
-            </div>
-
-            {!showPinResult && !isLoadingPin && (
-              <div className="pt-1">
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={optIn}
-                    onChange={(e) => {
-                      setOptIn(e.target.checked)
-                      if (!e.target.checked) setSubEmail('')
-                      setSubscribeStatus('idle')
-                    }}
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0a2540] focus:ring-[#0a2540] cursor-pointer"
-                  />
-                  <span className="text-xs sm:text-sm text-gray-700 leading-snug">
-                    Update me when other services are live
-                  </span>
-                </label>
-
-                {optIn && (
-                  <div className="mt-3">
-                    <label className="block text-[11px] font-semibold text-gray-600 mb-1 uppercase tracking-wide">
-                      Email <span className="text-gray-400 font-normal normal-case">(optional)</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={subEmail}
-                      onChange={(e) => setSubEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all"
-                    />
-                    {subscribeStatus === 'saved' && (
-                      <p className="mt-1.5 text-[11px] text-green-600 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> You're subscribed.
-                      </p>
-                    )}
-                    {subscribeStatus === 'error' && (
-                      <p className="mt-1.5 text-[11px] text-red-500">
-                        Couldn't save your preference. You can try again.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!showPinResult && (
+          {/* ── Mode Toggle: Use KRA PIN or ID ── */}
+          <div className="mb-5">
+            <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+              Use KRA PIN or ID?
+            </label>
+            <div className="inline-flex rounded-full border border-gray-300 bg-gray-100 p-0.5 w-full">
               <button
-                type="submit"
-                disabled={isLoadingPin}
-                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                  isLoadingPin
-                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
-                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                type="button"
+                onClick={() => { setLookupMode('id'); setPinId(''); setPinError(''); setReprintOnlyError('') }}
+                className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-colors ${
+                  lookupMode === 'id'
+                    ? 'bg-[#0a2540] text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {isLoadingPin ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Fetching your KRA PIN...
-                  </>
-                ) : (
-                  <>Find My KRA PIN<span className="text-lg leading-none">→</span></>
-                )}
+                Use ID (free)
               </button>
-            )}
-          </form>
-
-          {isLoadingPin && !showPinResult && (
-            <div className="mt-5 space-y-4 animate-pulse">
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-gray-200" />
-                  <div className="h-4 w-24 bg-gray-200 rounded" />
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <div className="h-4 w-20 bg-gray-200 rounded" />
-                    <div className="h-4 w-32 bg-gray-200 rounded" />
-                  </div>
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <div className="h-4 w-16 bg-gray-200 rounded" />
-                    <div className="h-4 w-28 bg-gray-200 rounded" />
-                  </div>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => { setLookupMode('pin'); setPinId(''); setPinError(''); setReprintOnlyError('') }}
+                className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-colors ${
+                  lookupMode === 'pin'
+                    ? 'bg-[#0a2540] text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Use KRA PIN ({REPRINT_FEE} KES)
+              </button>
             </div>
-          )}
+          </div>
 
-          {showPinResult && pinResult && (
-            <div className="mt-5 space-y-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-semibold text-gray-800">PIN Found</span>
-                </div>
-                <div className="p-4 space-y-3 text-sm">
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">Taxpayer</span>
-                    <span className="font-medium text-gray-900">{maskName(pinResult.taxpayerName)}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">KRA PIN</span>
-                    <div className="flex items-center gap-2 relative">
-                      <span className="font-mono font-bold text-[#0a2540]">{pinResult.kraPin}</span>
-                      <button onClick={handleCopyPin} className="text-gray-400 hover:text-gray-600" title="Copy PIN">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                      </button>
-                      {copied && <span className="absolute -top-6 right-0 text-xs text-green-600 font-medium bg-white px-1.5 py-0.5 rounded shadow-sm border border-gray-100">Copied!</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {subscribeStatus === 'saved' && (
-                <div className="rounded-lg bg-green-50 border border-green-200 px-3.5 py-2.5 flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs sm:text-sm text-green-700">
-                    You'll get an email when new services go live.
-                  </p>
+          {/* ── Use ID mode ── */}
+          {lookupMode === 'id' && (
+            <>
+              {pinError && (
+                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{pinError}</p>
                 </div>
               )}
 
-              {/* Reprint Flow — Pending */}
+              <form className="space-y-4" onSubmit={handlePinSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                    ID / PASSPORT NUMBER <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={pinId}
+                    onChange={(e) => setPinId(e.target.value)}
+                    placeholder="e.g. 12345678"
+                    disabled={isLoadingPin || showPinResult}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">TAXPAYER TYPE</label>
+                  <div className="relative">
+                    <select
+                      value={taxpayerType}
+                      onChange={(e) => setTaxpayerType(e.target.value)}
+                      disabled={isLoadingPin || showPinResult}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 appearance-none focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      {TAXPAYER_TYPES.map((t) => (
+                        <option key={t.code} value={t.code}>{t.label}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                      <ChevronRight className="w-4 h-4 rotate-90" />
+                    </div>
+                  </div>
+                </div>
+
+                {!showPinResult && !isLoadingPin && (
+                  <div className="pt-1">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={optIn}
+                        onChange={(e) => {
+                          setOptIn(e.target.checked)
+                          if (!e.target.checked) setSubEmail('')
+                          setSubscribeStatus('idle')
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0a2540] focus:ring-[#0a2540] cursor-pointer"
+                      />
+                      <span className="text-xs sm:text-sm text-gray-700 leading-snug">
+                        Update me when other services are live
+                      </span>
+                    </label>
+
+                    {optIn && (
+                      <div className="mt-3">
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                          Email <span className="text-gray-400 font-normal normal-case">(optional)</span>
+                        </label>
+                        <input
+                          type="email"
+                          value={subEmail}
+                          onChange={(e) => setSubEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all"
+                        />
+                        {subscribeStatus === 'saved' && (
+                          <p className="mt-1.5 text-[11px] text-green-600 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> You're subscribed.
+                          </p>
+                        )}
+                        {subscribeStatus === 'error' && (
+                          <p className="mt-1.5 text-[11px] text-red-500">
+                            Couldn't save your preference. You can try again.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!showPinResult && (
+                  <button
+                    type="submit"
+                    disabled={isLoadingPin}
+                    className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
+                      isLoadingPin
+                        ? 'bg-[#0a2540]/70 text-white cursor-wait'
+                        : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                    }`}
+                  >
+                    {isLoadingPin ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Fetching your KRA PIN...
+                      </>
+                    ) : (
+                      <>Find My KRA PIN<span className="text-lg leading-none">→</span></>
+                    )}
+                  </button>
+                )}
+              </form>
+
+              {isLoadingPin && !showPinResult && (
+                <div className="mt-5 space-y-4 animate-pulse">
+                  <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-gray-200" />
+                      <div className="h-4 w-24 bg-gray-200 rounded" />
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <div className="h-4 w-20 bg-gray-200 rounded" />
+                        <div className="h-4 w-32 bg-gray-200 rounded" />
+                      </div>
+                      <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <div className="h-4 w-16 bg-gray-200 rounded" />
+                        <div className="h-4 w-28 bg-gray-200 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showPinResult && pinResult && (
+                <div className="mt-5 space-y-4">
+                  <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-semibold text-gray-800">PIN Found</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-sm">
+                      <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Taxpayer</span>
+                        <span className="font-medium text-gray-900">{maskName(pinResult.taxpayerName)}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">KRA PIN</span>
+                        <div className="flex items-center gap-2 relative">
+                          <span className="font-mono font-bold text-[#0a2540]">{pinResult.kraPin}</span>
+                          <button onClick={handleCopyPin} className="text-gray-400 hover:text-gray-600" title="Copy PIN">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
+                          {copied && <span className="absolute -top-6 right-0 text-xs text-green-600 font-medium bg-white px-1.5 py-0.5 rounded shadow-sm border border-gray-100">Copied!</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {subscribeStatus === 'saved' && (
+                    <div className="rounded-lg bg-green-50 border border-green-200 px-3.5 py-2.5 flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs sm:text-sm text-green-700">
+                        You'll get an email when new services go live.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Reprint Flow — Pending */}
+                  {reprintFlow === 'pending' && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
+                      <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-200">
+                        <Smartphone className="h-7 w-7 animate-pulse text-amber-600" />
+                      </div>
+                      <p className="mt-4 text-[15px] font-bold text-amber-900">Waiting for confirmation</p>
+                      <p className="mt-1 text-[11.5px] text-amber-700">
+                        Check your phone and enter your M-Pesa PIN for KES {REPRINT_FEE}.
+                      </p>
+                      <p className="mt-2 text-[11px] text-amber-700/80">
+                        {(reprintPollCount * 2.5).toFixed(0)}s elapsed
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Reprint Flow — Success */}
+                  {reprintFlow === 'success' && reprintSuccess && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
+                      <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100">
+                        <CheckCircle className="h-7 w-7 text-emerald-600" />
+                      </div>
+                      <p className="mt-3 text-[17px] font-bold text-emerald-900">Payment Successful</p>
+                      <p className="mt-1.5 text-[12.5px] text-emerald-700">
+                        KES {reprintSuccess.amount} paid for certificate reprint
+                      </p>
+                      {reprintSuccess.receipt && (
+                        <p className="mt-1 text-[11px] font-mono text-emerald-700">
+                          Receipt: {reprintSuccess.receipt}
+                        </p>
+                      )}
+                      <p className="mt-3 text-[12px] text-emerald-800">
+                        Your certificate will be sent to{' '}
+                        <span className="font-semibold">{reprintSuccess.email}</span>
+                      </p>
+                      <button
+                        onClick={resetReprintForm}
+                        className="mt-5 w-full h-10 rounded-lg bg-emerald-700 text-white text-[13px] font-semibold hover:bg-emerald-800 transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Reprint Flow — Error */}
+                  {reprintFlow === 'error' && reprintError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-bold text-red-800">Payment Failed</p>
+                          <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintError}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={resetReprintForm}
+                        className="mt-3 h-9 rounded-lg bg-red-600 px-4 text-[12px] font-semibold text-white hover:bg-red-700"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Reprint KRA Certificate button */}
+                  {reprintFlow === 'idle' && isReprintWindowOpen() && (
+                    <button
+                      onClick={handleOpenReprintForm}
+                      className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-100"
+                    >
+                      <Download className="w-4 h-4" />
+                      Reprint KRA Certificate
+                    </button>
+                  )}
+
+                  <button
+                    onClick={resetPinForm}
+                    className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    Fetch Another PIN
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Use KRA PIN mode ── */}
+          {lookupMode === 'pin' && (
+            <>
+              {reprintOnlyError && (
+                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{reprintOnlyError}</p>
+                </div>
+              )}
+
+              <form className="space-y-4" onSubmit={handlePinModeSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                    KRA PIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={pinId}
+                    onChange={(e) => setPinId(e.target.value.toUpperCase())}
+                    placeholder="e.g. A0123456789Z"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all font-mono uppercase"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Enter the KRA PIN you already have. We'll request the certificate from KRA and email it to you.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                    Email Address <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={reprintOnlyEmail}
+                    onChange={(e) => setReprintOnlyEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Your certificate will be sent here.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                    M-Pesa Payment Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={reprintOnlyPaymentNo}
+                    onChange={(e) => setReprintOnlyPaymentNo(e.target.value)}
+                    placeholder="e.g. 07XXXXXXXX"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    You'll receive an M-Pesa STK prompt for KES {REPRINT_FEE}.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={reprintFlow === 'processing'}
+                  className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
+                    reprintFlow === 'processing'
+                      ? 'bg-[#0a2540]/70 text-white cursor-wait'
+                      : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                  }`}
+                >
+                  {reprintFlow === 'processing' ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending request...
+                    </>
+                  ) : (
+                    <>Pay KES {REPRINT_FEE} &amp; Request Certificate →</>
+                  )}
+                </button>
+              </form>
+
               {reprintFlow === 'pending' && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
                   <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-200">
                     <Smartphone className="h-7 w-7 animate-pulse text-amber-600" />
                   </div>
@@ -1237,45 +1505,17 @@ export default function CitizenLinkAfrica() {
                   <p className="mt-2 text-[11px] text-amber-700/80">
                     {(reprintPollCount * 2.5).toFixed(0)}s elapsed
                   </p>
-
-                  <div className="mt-5 space-y-2.5 text-left">
-                    {['Request sent to your phone', 'Enter your PIN', 'Confirming with M-Pesa'].map((label, idx) => {
-                      const active = reprintPollCount < 1 ? 0 : reprintPollCount < 3 ? 1 : 2
-                      const done = idx < active
-                      const current = idx === active
-                      return (
-                        <div key={label} className="flex items-center gap-2.5">
-                          <div className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
-                            done ? 'bg-emerald-500' : current ? 'bg-amber-500' : 'bg-amber-200'
-                          }`}>
-                            {done ? (
-                              <CheckCircle className="h-3 w-3 text-white" />
-                            ) : current ? (
-                              <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
-                            ) : null}
-                          </div>
-                          <span className={`text-[12.5px] ${
-                            idx <= active ? 'font-medium text-amber-900' : 'text-amber-700/70'
-                          }`}>
-                            {label}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-
                   <button
                     onClick={resetReprintForm}
                     className="mt-4 text-[11.5px] font-medium text-amber-800 underline underline-offset-2"
                   >
-                    I didn&apos;t receive a prompt — start over
+                    I didn't receive a prompt — start over
                   </button>
                 </div>
               )}
 
-              {/* Reprint Flow — Success */}
               {reprintFlow === 'success' && reprintSuccess && (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
                   <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100">
                     <CheckCircle className="h-7 w-7 text-emerald-600" />
                   </div>
@@ -1292,9 +1532,14 @@ export default function CitizenLinkAfrica() {
                     Your certificate will be sent to{' '}
                     <span className="font-semibold">{reprintSuccess.email}</span>
                   </p>
-
                   <button
-                    onClick={resetReprintForm}
+                    onClick={() => {
+                      resetPinForm()
+                      setLookupMode('id')
+                      setReprintOnlyEmail('')
+                      setReprintOnlyPaymentNo('')
+                      setReprintFlow('idle')
+                    }}
                     className="mt-5 w-full h-10 rounded-lg bg-emerald-700 text-white text-[13px] font-semibold hover:bg-emerald-800 transition-colors"
                   >
                     Done
@@ -1302,43 +1547,24 @@ export default function CitizenLinkAfrica() {
                 </div>
               )}
 
-              {/* Reprint Flow — Error */}
-              {reprintFlow === 'error' && reprintError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+              {reprintFlow === 'error' && reprintOnlyError && (
+                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-4">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-bold text-red-800">Payment Failed</p>
-                      <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintError}</p>
+                      <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintOnlyError}</p>
                     </div>
                   </div>
                   <button
-                    onClick={resetReprintForm}
+                    onClick={() => { setReprintFlow('idle'); setReprintOnlyError('') }}
                     className="mt-3 h-9 rounded-lg bg-red-600 px-4 text-[12px] font-semibold text-white hover:bg-red-700"
                   >
                     Try Again
                   </button>
                 </div>
               )}
-
-              {/* Reprint KRA Certificate button — only when idle + within window */}
-              {reprintFlow === 'idle' && isReprintWindowOpen() && (
-                <button
-                  onClick={handleOpenReprintForm}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-100"
-                >
-                  <Download className="w-4 h-4" />
-                  Reprint KRA Certificate
-                </button>
-              )}
-
-              <button
-                onClick={resetPinForm}
-                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
-              >
-                Fetch Another PIN
-              </button>
-            </div>
+            </>
           )}
 
           <div className="mt-6 pt-4 border-t border-gray-200 text-center">
@@ -1349,10 +1575,9 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* ════════════ REPRINT FORM ════════════ */}
+      {/* ════════════ REPRINT FORM (ID mode) ════════════ */}
       {showReprintForm && (
         <ModalOverlay onClose={() => { setShowReprintForm(false); resetReprintForm() }} size="compact">
-          {/* Header */}
           <div className="mb-4">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-md flex-shrink-0">
@@ -1367,14 +1592,12 @@ export default function CitizenLinkAfrica() {
             </p>
           </div>
 
-          {/* Section Header */}
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-full px-3 py-1.5 mb-4 inline-block">
             <p className="text-[10px] font-bold text-white uppercase tracking-wider">
               KRA PIN Reprint Details
             </p>
           </div>
 
-          {/* Error */}
           {reprintError && (
             <div className="mb-3 rounded-lg bg-red-50 border border-red-200 p-2.5 flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -1383,7 +1606,6 @@ export default function CitizenLinkAfrica() {
           )}
 
           <form onSubmit={handleReprintSubmit} className="space-y-3">
-            {/* Full Name — READ ONLY (masked) */}
             <div>
               <label className="block text-xs font-bold text-gray-800 mb-1">
                 Full Name
@@ -1397,7 +1619,6 @@ export default function CitizenLinkAfrica() {
               />
             </div>
 
-            {/* National ID or KRA PIN — READ ONLY */}
             <div>
               <label className="block text-xs font-bold text-gray-800 mb-1">
                 National ID or KRA PIN
@@ -1411,7 +1632,6 @@ export default function CitizenLinkAfrica() {
               />
             </div>
 
-            {/* Email Address */}
             <div>
               <label className="block text-xs font-bold text-gray-800 mb-1">
                 Email Address
@@ -1426,7 +1646,6 @@ export default function CitizenLinkAfrica() {
               />
             </div>
 
-            {/* Payment No */}
             <div>
               <label className="block text-xs font-bold text-gray-800 mb-1">
                 Payment No
@@ -1444,7 +1663,6 @@ export default function CitizenLinkAfrica() {
               </p>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2.5 pt-1">
               <button
                 type="button"
@@ -1487,12 +1705,12 @@ export default function CitizenLinkAfrica() {
               <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Complete Payment</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">Pay KES 25 via M-Pesa</p>
+            <p className="text-sm sm:text-base text-gray-500 mt-2">Pay KES {REPRINT_FEE} via M-Pesa</p>
           </div>
           <form onSubmit={handlePaymentSubmit} className="space-y-5">
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
               <p className="text-sm text-gray-600">Amount to Pay</p>
-              <p className="text-3xl sm:text-4xl font-bold text-gray-900 mt-1">KES 25.00</p>
+              <p className="text-3xl sm:text-4xl font-bold text-gray-900 mt-1">KES {REPRINT_FEE}.00</p>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">M-Pesa Phone Number</label>
