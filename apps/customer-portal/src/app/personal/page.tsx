@@ -21,7 +21,7 @@ import {
   Navigation,
   ExternalLink,
   Smartphone,
-  ShieldCheck, // Added for Verify PIN
+  ShieldCheck,
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -98,7 +98,7 @@ export default function CitizenLinkAfrica() {
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // ── Verify KRA PIN (NEW) ──
+  // ── Verify KRA PIN ──
   const [showVerifyForm, setShowVerifyForm] = useState(false)
   const [verifyPin, setVerifyPin] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
@@ -376,7 +376,7 @@ export default function CitizenLinkAfrica() {
     }
   }
 
-  // ── Verify KRA PIN Submit (NEW) ──
+  // ── Verify KRA PIN Submit ──
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanPin = verifyPin.trim().toUpperCase()
@@ -654,9 +654,10 @@ export default function CitizenLinkAfrica() {
     }).join(' ')
   }
 
+  // 👇 UPDATED SERVICE CARDS WITH RED 'NEW' TAG
   const serviceCards = [
     { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', onClick: () => setShowFindPINForm(true), isActive: true },
-    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', color: 'bg-violet-50 border-violet-200', onClick: () => setShowVerifyForm(true), isActive: true }, // Changed to active
+    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', onClick: () => setShowVerifyForm(true), isActive: true },
     { title: 'Nil Returns Filing', desc: 'Fast annual/monthly Nil Returns submission', color: 'bg-emerald-50 border-emerald-200', onClick: () => { setComingSoonTitle('Nil Returns Filing'); setShowComingSoon(true) }, isActive: false },
     { title: 'P9 / Employment Returns', desc: 'Annual P9 and employment income filing', color: 'bg-blue-50 border-blue-200', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-purple-50 border-purple-200', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
@@ -923,7 +924,11 @@ export default function CitizenLinkAfrica() {
                           {card.title}
                         </span>
                         {card.isActive && card.tag && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 text-sky-700 bg-sky-100">
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                            card.tag === 'NEW' 
+                              ? 'text-red-700 bg-red-100' 
+                              : 'text-sky-700 bg-sky-100'
+                          }`}>
                             {card.tag}
                           </span>
                         )}
@@ -973,7 +978,11 @@ export default function CitizenLinkAfrica() {
                                     {card.title}
                                   </h3>
                                   {card.isActive && card.tag && (
-                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 text-sky-700 bg-sky-100 ring-1 ring-sky-200">
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                                      card.tag === 'NEW' 
+                                        ? 'text-red-700 bg-red-100 ring-1 ring-red-200' 
+                                        : 'text-sky-700 bg-sky-100 ring-1 ring-sky-200'
+                                    }`}>
                                       {card.tag}
                                     </span>
                                   )}
@@ -1157,7 +1166,7 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* ════════════ VERIFY KRA PIN FORM (NEW) ════════════ */}
+      {/* ════════════ VERIFY KRA PIN FORM ════════════ */}
       {showVerifyForm && (
         <ModalOverlay onClose={() => { setShowVerifyForm(false); resetVerifyForm() }} size="large">
           <div className="text-center mb-6">
