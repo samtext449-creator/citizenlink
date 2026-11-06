@@ -21,6 +21,7 @@ import {
   Navigation,
   ExternalLink,
   Smartphone,
+  ShieldCheck, // Added for Verify PIN
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -52,6 +53,13 @@ interface PinResult {
   taxpayerName: string
   taxpayerType: string
   taxpayerId: string
+}
+
+interface VerifyResult {
+  kraPin: string
+  taxpayerName: string
+  taxpayerType: string
+  status: string
 }
 
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
@@ -89,6 +97,13 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
+
+  // ── Verify KRA PIN (NEW) ──
+  const [showVerifyForm, setShowVerifyForm] = useState(false)
+  const [verifyPin, setVerifyPin] = useState('')
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
+  const [verifyError, setVerifyError] = useState('')
 
   // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
   const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
@@ -361,6 +376,54 @@ export default function CitizenLinkAfrica() {
     }
   }
 
+  // ── Verify KRA PIN Submit (NEW) ──
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanPin = verifyPin.trim().toUpperCase()
+    if (!cleanPin || cleanPin.length < 10) {
+      setVerifyError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    setIsVerifying(true)
+    setVerifyError('')
+    setVerifyResult(null)
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kraPin: cleanPin }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.success) {
+        setVerifyError(getKraErrorMessage(data, res.status))
+        return
+      }
+
+      setVerifyResult({
+        kraPin: data.data.kraPin,
+        taxpayerName: data.data.taxpayerName,
+        taxpayerType: data.data.taxpayerType,
+        status: data.data.status,
+      })
+    } catch (err) {
+      console.error('[KRA VERIFY] error', err)
+      setVerifyError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  const resetVerifyForm = () => {
+    setVerifyPin('')
+    setVerifyResult(null)
+    setVerifyError('')
+    setIsVerifying(false)
+  }
+
   // ── KRA PIN mode: skip fetch, send request directly to admin ──
   const handlePinModeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -593,7 +656,7 @@ export default function CitizenLinkAfrica() {
 
   const serviceCards = [
     { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', onClick: () => setShowFindPINForm(true), isActive: true },
-    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', color: 'bg-violet-50 border-violet-200', onClick: () => { setComingSoonTitle('Verify KRA PIN'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', color: 'bg-violet-50 border-violet-200', onClick: () => setShowVerifyForm(true), isActive: true }, // Changed to active
     { title: 'Nil Returns Filing', desc: 'Fast annual/monthly Nil Returns submission', color: 'bg-emerald-50 border-emerald-200', onClick: () => { setComingSoonTitle('Nil Returns Filing'); setShowComingSoon(true) }, isActive: false },
     { title: 'P9 / Employment Returns', desc: 'Annual P9 and employment income filing', color: 'bg-blue-50 border-blue-200', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-purple-50 border-purple-200', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
@@ -1090,6 +1153,125 @@ export default function CitizenLinkAfrica() {
               </div>
               <ArrowRight className="h-5 w-5 text-purple-600" />
             </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ════════════ VERIFY KRA PIN FORM (NEW) ════════════ */}
+      {showVerifyForm && (
+        <ModalOverlay onClose={() => { setShowVerifyForm(false); resetVerifyForm() }} size="large">
+          <div className="text-center mb-6">
+            <div className="bg-gradient-to-r from-sky-600 to-sky-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4">
+              <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Verify KRA PIN</h2>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">Confirm a KRA PIN and check its status instantly.</p>
+          </div>
+
+          <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+              >
+                How we handle your data
+              </a>
+            </p>
+          </div>
+
+          {verifyError && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{verifyError}</p>
+            </div>
+          )}
+
+          {!verifyResult ? (
+            <form className="space-y-4" onSubmit={handleVerifySubmit}>
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                  KRA PIN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={verifyPin}
+                  onChange={(e) => setVerifyPin(e.target.value.toUpperCase())}
+                  placeholder="e.g. A020360004V"
+                  disabled={isVerifying}
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isVerifying}
+                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
+                  isVerifying
+                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                }`}
+              >
+                {isVerifying ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verifying PIN...
+                  </>
+                ) : (
+                  <>Verify KRA PIN<span className="text-lg leading-none">→</span></>
+                )}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <div className="bg-green-50 px-4 py-2.5 border-b border-green-200 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold text-green-800">PIN Verified Successfully</span>
+                </div>
+                <div className="p-4 space-y-3 text-sm">
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <span className="text-gray-500">Taxpayer Name</span>
+                    <span className="font-medium text-gray-900">{verifyResult.taxpayerName}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <span className="text-gray-500">KRA PIN</span>
+                    <span className="font-mono font-bold text-[#0a2540]">{verifyResult.kraPin}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <span className="text-gray-500">Status</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      verifyResult.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {verifyResult.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Taxpayer Type</span>
+                    <span className="font-medium text-gray-900">{verifyResult.taxpayerType}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={resetVerifyForm}
+                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                Verify Another PIN
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+            <p className="text-xs text-gray-400">
+              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
+            </p>
           </div>
         </ModalOverlay>
       )}
