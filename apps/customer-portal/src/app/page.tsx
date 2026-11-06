@@ -49,10 +49,8 @@ const TAXPAYER_TYPES = [
   { label: 'Company', code: 'COMP' },
 ]
 
-// ⚠️ Reprint fee — change to 1 for testing, 25 for production
 const REPRINT_FEE = 25
 
-// Reprint service window: 8:00 AM – 6:30 PM (local time)
 const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
 
 function isReprintWindowOpen(): boolean {
@@ -71,6 +69,13 @@ interface PinResult {
   taxpayerName: string
   taxpayerType: string
   taxpayerId: string
+}
+
+interface VerifyResult {
+  kraPin: string
+  taxpayerName: string
+  taxpayerType: string
+  status: string
 }
 
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
@@ -102,6 +107,13 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
+
+  // Verify KRA PIN
+  const [showVerifyForm, setShowVerifyForm] = useState(false)
+  const [verifyPin, setVerifyPin] = useState('')
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
+  const [verifyError, setVerifyError] = useState('')
 
   // Opt-in (compact)
   const [optIn, setOptIn] = useState(false)
@@ -331,6 +343,54 @@ export default function CitizenLinkAfrica() {
     }
   }
 
+  // ── Verify KRA PIN ──
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanPin = verifyPin.trim().toUpperCase()
+    if (!cleanPin || cleanPin.length < 10) {
+      setVerifyError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    setIsVerifying(true)
+    setVerifyError('')
+    setVerifyResult(null)
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kraPin: cleanPin }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.success) {
+        setVerifyError(getKraErrorMessage(data, res.status))
+        return
+      }
+
+      setVerifyResult({
+        kraPin: data.data.kraPin,
+        taxpayerName: data.data.taxpayerName,
+        taxpayerType: data.data.taxpayerType,
+        status: data.data.status,
+      })
+    } catch (err) {
+      console.error('[KRA VERIFY] error', err)
+      setVerifyError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  const resetVerifyForm = () => {
+    setVerifyPin('')
+    setVerifyResult(null)
+    setVerifyError('')
+    setIsVerifying(false)
+  }
+
   const handleCopyPin = () => {
     if (!pinResult) return
     navigator.clipboard.writeText(pinResult.kraPin)
@@ -501,7 +561,7 @@ export default function CitizenLinkAfrica() {
     }).join(' ')
   }
 
-  // ── Free tools (single card in the hero) ──
+  // 👇 UPDATED FREE TOOLS WITH RED 'NEW' TAG
   const freeTools = [
     {
       title: 'Find My KRA PIN',
@@ -512,10 +572,10 @@ export default function CitizenLinkAfrica() {
     },
     {
       title: 'Verify KRA PIN',
-      tag: 'Soon',
+      tag: 'NEW',
       icon: ShieldCheck,
-      isActive: false,
-      onClick: () => { setComingSoonTitle('Verify KRA PIN'); setShowComingSoon(true) },
+      isActive: true,
+      onClick: () => setShowVerifyForm(true),
     },
     {
       title: 'Tax Compliance Certificate',
@@ -533,7 +593,6 @@ export default function CitizenLinkAfrica() {
     },
   ]
 
-  // ── Top nav — human, natural labels ──
   const topNav = ['Workflows', 'Developers', 'Community', 'Resources']
 
   const scrollToTools = () => {
@@ -635,9 +694,7 @@ export default function CitizenLinkAfrica() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
-      {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 w-full">
-        {/* Amber disclaimer */}
         <div className="w-full bg-[#FBBF24]">
           <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-2 py-2.5">
@@ -649,12 +706,9 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
 
-        {/* Navy nav bar */}
         <div className="w-full bg-gradient-to-r from-[#0b1a73] via-[#1a2fb0] to-[#3548e6] shadow-lg">
           <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
-
-              {/* Left cluster: logo + Personal/Business toggle */}
               <div className="flex items-center gap-5 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <LogoMark className="w-9 h-7 sm:w-11 sm:h-8" gradientId="logo-nav" />
@@ -663,7 +717,6 @@ export default function CitizenLinkAfrica() {
                   </span>
                 </div>
 
-                {/* Personal / Business toggle */}
                 <div className="hidden md:inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5">
                   <button
                     type="button"
@@ -681,7 +734,6 @@ export default function CitizenLinkAfrica() {
                 </div>
               </div>
 
-              {/* Center nav — desktop */}
               <nav className="hidden lg:flex items-center gap-8">
                 {topNav.map((label) => (
                   <button
@@ -693,7 +745,6 @@ export default function CitizenLinkAfrica() {
                 ))}
               </nav>
 
-              {/* Right */}
               <div className="flex items-center gap-3 flex-shrink-0">
                 <button
                   type="button"
@@ -712,7 +763,6 @@ export default function CitizenLinkAfrica() {
                   Get started
                 </button>
 
-                {/* Mobile menu button */}
                 <button
                   className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -723,7 +773,6 @@ export default function CitizenLinkAfrica() {
               </div>
             </div>
 
-            {/* Mobile menu */}
             {isMobileMenuOpen && (
               <div className="lg:hidden py-3 border-t border-white/10">
                 <div className="mb-3 inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5">
@@ -769,7 +818,6 @@ export default function CitizenLinkAfrica() {
         </div>
       </header>
 
-      {/* ──────── HERO ──────── */}
       <main className="flex-1 w-full bg-white">
         <section className="relative overflow-hidden bg-gradient-to-b from-[#f3f6ff] via-[#f7f9ff] to-white">
           <div className="pointer-events-none absolute inset-0">
@@ -781,7 +829,6 @@ export default function CitizenLinkAfrica() {
           <div className="relative max-w-[1550px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 lg:pt-16 pb-10 sm:pb-14">
             <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-12 items-center transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
 
-              {/* LEFT — copy */}
               <div>
                 <div className="inline-flex items-center gap-2.5 bg-[#eaf0ff] border border-[#cddbfb] text-[#2a3bd0] text-[10px] sm:text-[11.5px] font-bold px-4 h-9 rounded-full mb-7 tracking-[0.16em] uppercase">
                   <Zap className="w-4 h-4 fill-[#2a3bd0]" />
@@ -831,7 +878,6 @@ export default function CitizenLinkAfrica() {
                   <span>Compliance operations</span>
                 </div>
 
-                {/* Free tools — one card */}
                 <div
                   id="free-tools"
                   className="mt-10 max-w-[600px] rounded-2xl border border-[#e3e9f6] bg-white shadow-[0_16px_40px_-20px_rgba(40,60,160,0.2)] overflow-hidden"
@@ -861,7 +907,11 @@ export default function CitizenLinkAfrica() {
                               </span>
                               <span className="mt-1.5 flex items-center gap-2">
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                  tool.isActive ? 'text-blue-700 bg-blue-100' : 'text-slate-500 bg-slate-100'
+                                  tool.tag === 'NEW'
+                                    ? 'text-red-700 bg-red-100 ring-1 ring-red-200'
+                                    : tool.isActive
+                                      ? 'text-blue-700 bg-blue-100'
+                                      : 'text-slate-500 bg-slate-100'
                                 }`}>
                                   {tool.tag}
                                 </span>
@@ -881,7 +931,6 @@ export default function CitizenLinkAfrica() {
                 </div>
               </div>
 
-              {/* RIGHT — workflow card */}
               <div className="relative min-w-0">
                 <WorkflowCard />
               </div>
@@ -890,7 +939,6 @@ export default function CitizenLinkAfrica() {
         </section>
       </main>
 
-      {/* ──────── FOOTER ──────── */}
       <footer className="w-full bg-slate-900 text-slate-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
@@ -1043,6 +1091,125 @@ export default function CitizenLinkAfrica() {
               </div>
               <ArrowRight className="h-5 w-5 text-purple-600" />
             </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ════════════ VERIFY KRA PIN FORM ════════════ */}
+      {showVerifyForm && (
+        <ModalOverlay onClose={() => { setShowVerifyForm(false); resetVerifyForm() }} size="large">
+          <div className="text-center mb-6">
+            <div className="bg-gradient-to-r from-sky-600 to-sky-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4">
+              <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Verify KRA PIN</h2>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">Confirm a KRA PIN and check its status instantly.</p>
+          </div>
+
+          <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+              >
+                How we handle your data
+              </a>
+            </p>
+          </div>
+
+          {verifyError && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{verifyError}</p>
+            </div>
+          )}
+
+          {!verifyResult ? (
+            <form className="space-y-4" onSubmit={handleVerifySubmit}>
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                  KRA PIN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={verifyPin}
+                  onChange={(e) => setVerifyPin(e.target.value.toUpperCase())}
+                  placeholder="e.g. A020360004V"
+                  disabled={isVerifying}
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isVerifying}
+                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
+                  isVerifying
+                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                }`}
+              >
+                {isVerifying ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verifying PIN...
+                  </>
+                ) : (
+                  <>Verify KRA PIN<span className="text-lg leading-none">→</span></>
+                )}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <div className="bg-green-50 px-4 py-2.5 border-b border-green-200 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold text-green-800">PIN Verified Successfully</span>
+                </div>
+                <div className="p-4 space-y-3 text-sm">
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <span className="text-gray-500">Taxpayer Name</span>
+                    <span className="font-medium text-gray-900">{verifyResult.taxpayerName}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <span className="text-gray-500">KRA PIN</span>
+                    <span className="font-mono font-bold text-[#0a2540]">{verifyResult.kraPin}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <span className="text-gray-500">Status</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      verifyResult.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {verifyResult.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Taxpayer Type</span>
+                    <span className="font-medium text-gray-900">{verifyResult.taxpayerType}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={resetVerifyForm}
+                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                Verify Another PIN
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+            <p className="text-xs text-gray-400">
+              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
+            </p>
           </div>
         </ModalOverlay>
       )}
