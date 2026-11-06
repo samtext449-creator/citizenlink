@@ -78,6 +78,12 @@ interface VerifyResult {
   status: string
 }
 
+interface Obligation {
+  id: string
+  name: string
+  type: string
+}
+
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
 
 export default function CitizenLinkAfrica() {
@@ -114,6 +120,13 @@ export default function CitizenLinkAfrica() {
   const [isVerifying, setIsVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
   const [verifyError, setVerifyError] = useState('')
+
+  // ── Check Obligations (NEW) ──
+  const [showObligationsForm, setShowObligationsForm] = useState(false)
+  const [obligationsPin, setObligationsPin] = useState('')
+  const [isFetchingObligations, setIsFetchingObligations] = useState(false)
+  const [obligationsResult, setObligationsResult] = useState<Obligation[] | null>(null)
+  const [obligationsError, setObligationsError] = useState('')
 
   // Opt-in (compact)
   const [optIn, setOptIn] = useState(false)
@@ -391,6 +404,49 @@ export default function CitizenLinkAfrica() {
     setIsVerifying(false)
   }
 
+  // ── Check Obligations (NEW) ──
+  const handleObligationsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanPin = obligationsPin.trim().toUpperCase()
+    if (!cleanPin || cleanPin.length < 10) {
+      setObligationsError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    setIsFetchingObligations(true)
+    setObligationsError('')
+    setObligationsResult(null)
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kraPin: cleanPin }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.success) {
+        setObligationsError(getKraErrorMessage(data, res.status))
+        return
+      }
+
+      setObligationsResult(data.data.obligations)
+    } catch (err) {
+      console.error('[KRA OBLIGATIONS] error', err)
+      setObligationsError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsFetchingObligations(false)
+    }
+  }
+
+  const resetObligationsForm = () => {
+    setObligationsPin('')
+    setObligationsResult(null)
+    setObligationsError('')
+    setIsFetchingObligations(false)
+  }
+
   const handleCopyPin = () => {
     if (!pinResult) return
     navigator.clipboard.writeText(pinResult.kraPin)
@@ -561,7 +617,7 @@ export default function CitizenLinkAfrica() {
     }).join(' ')
   }
 
-  // 👇 UPDATED FREE TOOLS WITH RED 'NEW' TAG
+  // 👇 FREE TOOLS with Check Obligations ACTIVE
   const freeTools = [
     {
       title: 'Find My KRA PIN',
@@ -578,18 +634,18 @@ export default function CitizenLinkAfrica() {
       onClick: () => setShowVerifyForm(true),
     },
     {
+      title: 'Check My Obligations',
+      tag: 'NEW',
+      icon: FileText,
+      isActive: true,
+      onClick: () => setShowObligationsForm(true),
+    },
+    {
       title: 'Tax Compliance Certificate',
       tag: 'Soon',
       icon: FileSearch,
       isActive: false,
       onClick: () => { setComingSoonTitle('Tax Compliance Certificate'); setShowComingSoon(true) },
-    },
-    {
-      title: 'Check My Obligations',
-      tag: 'Soon',
-      icon: FileText,
-      isActive: false,
-      onClick: () => { setComingSoonTitle('Check My Obligations'); setShowComingSoon(true) },
     },
   ]
 
@@ -1091,6 +1147,116 @@ export default function CitizenLinkAfrica() {
               </div>
               <ArrowRight className="h-5 w-5 text-purple-600" />
             </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ════════════ CHECK OBLIGATIONS FORM ════════════ */}
+      {showObligationsForm && (
+        <ModalOverlay onClose={() => { setShowObligationsForm(false); resetObligationsForm() }} size="large">
+          <div className="text-center mb-6">
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Check My Obligations</h2>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">View all your active tax obligations from KRA.</p>
+          </div>
+
+          <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+              >
+                How we handle your data
+              </a>
+            </p>
+          </div>
+
+          {obligationsError && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{obligationsError}</p>
+            </div>
+          )}
+
+          {!obligationsResult ? (
+            <form className="space-y-4" onSubmit={handleObligationsSubmit}>
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                  KRA PIN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={obligationsPin}
+                  onChange={(e) => setObligationsPin(e.target.value.toUpperCase())}
+                  placeholder="e.g. A020360004V"
+                  disabled={isFetchingObligations}
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isFetchingObligations}
+                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
+                  isFetchingObligations
+                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                }`}
+              >
+                {isFetchingObligations ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Checking Obligations...
+                  </>
+                ) : (
+                  <>Check Obligations<span className="text-lg leading-none">→</span></>
+                )}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <div className="bg-green-50 px-4 py-2.5 border-b border-green-200 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold text-green-800">Obligations Found ({obligationsResult.length})</span>
+                </div>
+                <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
+                  {obligationsResult.map((ob) => (
+                    <div key={ob.id} className="flex items-start justify-between p-3 bg-gray-50 border border-gray-100 rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{ob.name}</p>
+                        <p className="text-[10px] text-gray-500 font-mono uppercase">{ob.id}</p>
+                      </div>
+                      <span className="ml-3 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                        {ob.type}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={resetObligationsForm}
+                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                Check Another PIN
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+            <p className="text-xs text-gray-400">
+              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
+            </p>
           </div>
         </ModalOverlay>
       )}
@@ -2430,7 +2596,7 @@ function ModalOverlay({ children, onClose, size = 'default' }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-5 sm:p-8 md:p-10 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
+      <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-4 sm:p-6 md:p-7 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
         <button
           onClick={onClose}
           className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl p-2 transition-all z-10"
