@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { Turnstile } from '@marsidev/react-turnstile'
 import {
   ArrowRight,
   ChevronRight,
@@ -37,7 +38,6 @@ const TAXPAYER_TYPES = [
 
 const REPRINT_FEE = 25
 
-// Reprint service window: 8:00 AM – 6:30 PM (local time)
 const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
 
 function isReprintWindowOpen(): boolean {
@@ -117,6 +117,15 @@ export default function CitizenLinkAfrica() {
   const [isFetchingObligations, setIsFetchingObligations] = useState(false)
   const [obligationsResult, setObligationsResult] = useState<Obligation[] | null>(null)
   const [obligationsError, setObligationsError] = useState('')
+
+  // ── Turnstile State ──
+  const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
+  const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string | null>(null)
+  const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
+  
+  const pinTurnstileRef = useRef<any>(null)
+  const verifyTurnstileRef = useRef<any>(null)
+  const obligationsTurnstileRef = useRef<any>(null)
 
   // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
   const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
@@ -349,6 +358,11 @@ export default function CitizenLinkAfrica() {
     e.preventDefault()
     if (!pinId.trim()) return
 
+    if (!pinTurnstileToken) {
+      setPinError('Please complete the security check.')
+      return
+    }
+
     if (optIn && !subEmail.trim()) {
       setPinError('Please enter your email to receive updates, or uncheck the box.')
       return
@@ -364,7 +378,11 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/api/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taxpayerType, taxpayerId: pinId.trim() }),
+        body: JSON.stringify({ 
+          taxpayerType, 
+          taxpayerId: pinId.trim(),
+          turnstileToken: pinTurnstileToken
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.success) {
@@ -386,6 +404,8 @@ export default function CitizenLinkAfrica() {
       setPinError('Network error. Please check your connection and try again.')
     } finally {
       setIsLoadingPin(false)
+      pinTurnstileRef.current?.reset()
+      setPinTurnstileToken(null)
     }
   }
 
@@ -398,6 +418,11 @@ export default function CitizenLinkAfrica() {
       return
     }
 
+    if (!verifyTurnstileToken) {
+      setVerifyError('Please complete the security check.')
+      return
+    }
+
     setIsVerifying(true)
     setVerifyError('')
     setVerifyResult(null)
@@ -406,7 +431,10 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kraPin: cleanPin }),
+        body: JSON.stringify({ 
+          kraPin: cleanPin,
+          turnstileToken: verifyTurnstileToken
+        }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -427,6 +455,8 @@ export default function CitizenLinkAfrica() {
       setVerifyError('Network error. Please check your connection and try again.')
     } finally {
       setIsVerifying(false)
+      verifyTurnstileRef.current?.reset()
+      setVerifyTurnstileToken(null)
     }
   }
 
@@ -435,14 +465,20 @@ export default function CitizenLinkAfrica() {
     setVerifyResult(null)
     setVerifyError('')
     setIsVerifying(false)
+    setVerifyTurnstileToken(null)
   }
 
-  // ── Fetch Obligations Submit (NEW) ──
+  // ── Fetch Obligations Submit ──
   const handleObligationsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanPin = obligationsPin.trim().toUpperCase()
     if (!cleanPin || cleanPin.length < 10) {
       setObligationsError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    if (!obligationsTurnstileToken) {
+      setObligationsError('Please complete the security check.')
       return
     }
 
@@ -454,7 +490,10 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kraPin: cleanPin }),
+        body: JSON.stringify({ 
+          kraPin: cleanPin,
+          turnstileToken: obligationsTurnstileToken
+        }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -470,6 +509,8 @@ export default function CitizenLinkAfrica() {
       setObligationsError('Network error. Please check your connection and try again.')
     } finally {
       setIsFetchingObligations(false)
+      obligationsTurnstileRef.current?.reset()
+      setObligationsTurnstileToken(null)
     }
   }
 
@@ -478,6 +519,7 @@ export default function CitizenLinkAfrica() {
     setObligationsResult(null)
     setObligationsError('')
     setIsFetchingObligations(false)
+    setObligationsTurnstileToken(null)
   }
 
   // ── KRA PIN mode: skip fetch, send request directly to admin ──
@@ -710,7 +752,6 @@ export default function CitizenLinkAfrica() {
     }).join(' ')
   }
 
-  // 👇 UPDATED SERVICE CARDS: Replaced Nil Returns with Check Obligations
   const serviceCards = [
     { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', onClick: () => setShowFindPINForm(true), isActive: true },
     { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', onClick: () => setShowVerifyForm(true), isActive: true },
@@ -1222,7 +1263,7 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* ════════════ CHECK OBLIGATIONS FORM (NEW) ════════════ */}
+      {/* ════════════ CHECK OBLIGATIONS FORM ════════════ */}
       {showObligationsForm && (
         <ModalOverlay onClose={() => { setShowObligationsForm(false); resetObligationsForm() }} size="large">
           <div className="text-center mb-6">
@@ -1271,11 +1312,21 @@ export default function CitizenLinkAfrica() {
                 />
               </div>
 
+              <div className="flex justify-center my-2">
+                <Turnstile
+                  ref={obligationsTurnstileRef}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => setObligationsTurnstileToken(token)}
+                  onExpire={() => setObligationsTurnstileToken(null)}
+                  options={{ theme: 'light' }}
+                />
+              </div>
+
               <button
                 type="submit"
-                disabled={isFetchingObligations}
+                disabled={isFetchingObligations || !obligationsTurnstileToken}
                 className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                  isFetchingObligations
+                  isFetchingObligations || !obligationsTurnstileToken
                     ? 'bg-[#0a2540]/70 text-white cursor-wait'
                     : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
                 }`}
@@ -1381,11 +1432,21 @@ export default function CitizenLinkAfrica() {
                 />
               </div>
 
+              <div className="flex justify-center my-2">
+                <Turnstile
+                  ref={verifyTurnstileRef}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => setVerifyTurnstileToken(token)}
+                  onExpire={() => setVerifyTurnstileToken(null)}
+                  options={{ theme: 'light' }}
+                />
+              </div>
+
               <button
                 type="submit"
-                disabled={isVerifying}
+                disabled={isVerifying || !verifyTurnstileToken}
                 className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                  isVerifying
+                  isVerifying || !verifyTurnstileToken
                     ? 'bg-[#0a2540]/70 text-white cursor-wait'
                     : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
                 }`}
@@ -1598,27 +1659,38 @@ export default function CitizenLinkAfrica() {
                 )}
 
                 {!showPinResult && (
-                  <button
-                    type="submit"
-                    disabled={isLoadingPin}
-                    className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                      isLoadingPin
-                        ? 'bg-[#0a2540]/70 text-white cursor-wait'
-                        : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
-                    }`}
-                  >
-                    {isLoadingPin ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Fetching your KRA PIN...
-                      </>
-                    ) : (
-                      <>Find My KRA PIN<span className="text-lg leading-none">→</span></>
-                    )}
-                  </button>
+                  <>
+                    <div className="flex justify-center my-2">
+                      <Turnstile
+                        ref={pinTurnstileRef}
+                        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                        onSuccess={(token) => setPinTurnstileToken(token)}
+                        onExpire={() => setPinTurnstileToken(null)}
+                        options={{ theme: 'light' }}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isLoadingPin || !pinTurnstileToken}
+                      className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
+                        isLoadingPin || !pinTurnstileToken
+                          ? 'bg-[#0a2540]/70 text-white cursor-wait'
+                          : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                      }`}
+                    >
+                      {isLoadingPin ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Fetching your KRA PIN...
+                        </>
+                      ) : (
+                        <>Find My KRA PIN<span className="text-lg leading-none">→</span></>
+                      )}
+                    </button>
+                  </>
                 )}
               </form>
 

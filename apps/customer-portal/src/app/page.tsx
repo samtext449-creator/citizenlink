@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
   ChevronRight,
@@ -87,6 +88,7 @@ interface Obligation {
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
 
 export default function CitizenLinkAfrica() {
+   const router = useRouter()
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
@@ -618,36 +620,36 @@ export default function CitizenLinkAfrica() {
   }
 
   // 👇 FREE TOOLS with Check Obligations ACTIVE
-  const freeTools = [
-    {
-      title: 'Find My KRA PIN',
-      tag: 'Free',
-      icon: Search,
-      isActive: true,
-      onClick: () => setShowFindPINForm(true),
-    },
-    {
-      title: 'Verify KRA PIN',
-      tag: 'NEW',
-      icon: ShieldCheck,
-      isActive: true,
-      onClick: () => setShowVerifyForm(true),
-    },
-    {
-      title: 'Check My Obligations',
-      tag: 'NEW',
-      icon: FileText,
-      isActive: true,
-      onClick: () => setShowObligationsForm(true),
-    },
-    {
-      title: 'Tax Compliance Certificate',
-      tag: 'Soon',
-      icon: FileSearch,
-      isActive: false,
-      onClick: () => { setComingSoonTitle('Tax Compliance Certificate'); setShowComingSoon(true) },
-    },
-  ]
+const freeTools = [
+  {
+    title: 'Find My KRA PIN',
+    tag: 'Free',
+    icon: Search,
+    isActive: true,
+    onClick: () => router.push('/personal?open=find-pin'),
+  },
+  {
+    title: 'Verify KRA PIN',
+    tag: 'NEW',
+    icon: ShieldCheck,
+    isActive: true,
+    onClick: () => router.push('/personal?open=verify-pin'),
+  },
+  {
+    title: 'Check My Obligations',
+    tag: 'NEW',
+    icon: FileText,
+    isActive: true,
+    onClick: () => router.push('/personal?open=obligations'),
+  },
+  {
+    title: 'Tax Compliance Certificate',
+    tag: 'Soon',
+    icon: FileSearch,
+    isActive: false,
+    onClick: () => router.push('/personal?open=coming-soon'),
+  },
+]
 
   const topNav = ['Workflows', 'Developers', 'Community', 'Resources']
 
