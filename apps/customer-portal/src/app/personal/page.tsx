@@ -1446,7 +1446,7 @@ export default function CitizenLinkAfrica() {
                 />
               </div>
 
-              <div className="flex justify-end my-2">
+              <div className="flex justify-start my-2">
                 <Turnstile
                   ref={verifyTurnstileRef}
                   siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
@@ -1679,7 +1679,7 @@ export default function CitizenLinkAfrica() {
 
                 {!showPinResult && (
                   <>
-                    <div className="flex justify-end my-2">
+                    <div className="flex justify-start my-2">
                       <Turnstile
                         ref={pinTurnstileRef}
                         siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
