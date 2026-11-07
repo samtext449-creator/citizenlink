@@ -380,7 +380,7 @@ export default function CitizenLinkAfrica() {
     setSubscribeStatus('idle')
 
     try {
-      const res = await fetch(`${XECOFLOW_PAY_BASE}/api/kratax/pin/fetch`, {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
