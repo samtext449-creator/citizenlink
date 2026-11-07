@@ -1319,7 +1319,7 @@ export default function CitizenLinkAfrica() {
                 />
               </div>
 
-              <div className="flex justify-end my-2">
+              <div className="flex justify-start my-2">
                 <Turnstile
                   ref={obligationsTurnstileRef}
                   siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
