@@ -37,7 +37,6 @@ const TAXPAYER_TYPES = [
 ]
 
 const REPRINT_FEE = 25
-
 const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
 
 function isReprintWindowOpen(): boolean {
@@ -104,24 +103,28 @@ export default function CitizenLinkAfrica() {
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // ── Verify KRA PIN ──
+  // Verify KRA PIN
   const [showVerifyForm, setShowVerifyForm] = useState(false)
   const [verifyPin, setVerifyPin] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
   const [verifyError, setVerifyError] = useState('')
 
-  // ── Check Obligations (NEW) ──
+  // Check Obligations
   const [showObligationsForm, setShowObligationsForm] = useState(false)
   const [obligationsPin, setObligationsPin] = useState('')
   const [isFetchingObligations, setIsFetchingObligations] = useState(false)
   const [obligationsResult, setObligationsResult] = useState<Obligation[] | null>(null)
   const [obligationsError, setObligationsError] = useState('')
 
-  // ── Turnstile State ──
+  // ── Turnstile State & Refs ──
   const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
   const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string | null>(null)
   const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
+  
+  const pinTurnstileTokenRef = useRef<string | null>(null)
+  const verifyTurnstileTokenRef = useRef<string | null>(null)
+  const obligationsTurnstileTokenRef = useRef<string | null>(null)
   
   const pinTurnstileRef = useRef<any>(null)
   const verifyTurnstileRef = useRef<any>(null)
@@ -358,7 +361,9 @@ export default function CitizenLinkAfrica() {
     e.preventDefault()
     if (!pinId.trim()) return
 
-    if (!pinTurnstileToken) {
+    const token = pinTurnstileTokenRef.current
+
+    if (!token) {
       setPinError('Please complete the security check.')
       return
     }
@@ -381,7 +386,7 @@ export default function CitizenLinkAfrica() {
         body: JSON.stringify({ 
           taxpayerType, 
           taxpayerId: pinId.trim(),
-          turnstileToken: pinTurnstileToken
+          turnstileToken: token
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -404,12 +409,12 @@ export default function CitizenLinkAfrica() {
       setPinError('Network error. Please check your connection and try again.')
     } finally {
       setIsLoadingPin(false)
+      pinTurnstileTokenRef.current = null
       pinTurnstileRef.current?.reset()
       setPinTurnstileToken(null)
     }
   }
 
-  // ── Verify KRA PIN Submit ──
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanPin = verifyPin.trim().toUpperCase()
@@ -418,7 +423,9 @@ export default function CitizenLinkAfrica() {
       return
     }
 
-    if (!verifyTurnstileToken) {
+    const token = verifyTurnstileTokenRef.current
+
+    if (!token) {
       setVerifyError('Please complete the security check.')
       return
     }
@@ -433,7 +440,7 @@ export default function CitizenLinkAfrica() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           kraPin: cleanPin,
-          turnstileToken: verifyTurnstileToken
+          turnstileToken: token
         }),
       })
 
@@ -455,6 +462,7 @@ export default function CitizenLinkAfrica() {
       setVerifyError('Network error. Please check your connection and try again.')
     } finally {
       setIsVerifying(false)
+      verifyTurnstileTokenRef.current = null
       verifyTurnstileRef.current?.reset()
       setVerifyTurnstileToken(null)
     }
@@ -466,9 +474,9 @@ export default function CitizenLinkAfrica() {
     setVerifyError('')
     setIsVerifying(false)
     setVerifyTurnstileToken(null)
+    verifyTurnstileTokenRef.current = null
   }
 
-  // ── Fetch Obligations Submit ──
   const handleObligationsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanPin = obligationsPin.trim().toUpperCase()
@@ -477,7 +485,9 @@ export default function CitizenLinkAfrica() {
       return
     }
 
-    if (!obligationsTurnstileToken) {
+    const token = obligationsTurnstileTokenRef.current
+
+    if (!token) {
       setObligationsError('Please complete the security check.')
       return
     }
@@ -492,7 +502,7 @@ export default function CitizenLinkAfrica() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           kraPin: cleanPin,
-          turnstileToken: obligationsTurnstileToken
+          turnstileToken: token
         }),
       })
 
@@ -509,6 +519,7 @@ export default function CitizenLinkAfrica() {
       setObligationsError('Network error. Please check your connection and try again.')
     } finally {
       setIsFetchingObligations(false)
+      obligationsTurnstileTokenRef.current = null
       obligationsTurnstileRef.current?.reset()
       setObligationsTurnstileToken(null)
     }
@@ -520,9 +531,9 @@ export default function CitizenLinkAfrica() {
     setObligationsError('')
     setIsFetchingObligations(false)
     setObligationsTurnstileToken(null)
+    obligationsTurnstileTokenRef.current = null
   }
 
-  // ── KRA PIN mode: skip fetch, send request directly to admin ──
   const handlePinModeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setReprintOnlyError('')
@@ -581,7 +592,6 @@ export default function CitizenLinkAfrica() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ── Reprint Form ──
   const handleOpenReprintForm = () => {
     if (pinResult) {
       const parts = (pinResult.taxpayerName || '').trim().split(/\s+/)
@@ -603,7 +613,6 @@ export default function CitizenLinkAfrica() {
     setShowReprintForm(true)
   }
 
-  // ── Reprint Poller ──
   const startReprintPolling = (requestId: string) => {
     setReprintPollCount(0)
     if (reprintPollRef.current) clearInterval(reprintPollRef.current)
@@ -658,7 +667,6 @@ export default function CitizenLinkAfrica() {
     }, POLL_INTERVAL_MS)
   }
 
-  // ── Reprint Submit (ID mode) ──
   const handleReprintSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setReprintError('')
@@ -739,6 +747,8 @@ export default function CitizenLinkAfrica() {
     setReprintOnlyError('')
     setReprintFlow('idle')
     setLookupMode('id')
+    setPinTurnstileToken(null)
+    pinTurnstileTokenRef.current = null
     resetReprintForm()
   }
 
@@ -1135,7 +1145,6 @@ export default function CitizenLinkAfrica() {
 
       {/* ════════════════ MODALS ════════════════ */}
 
-      {/* Find Nearest Cyber */}
       {showNearestCyberForm && (
         <ModalOverlay onClose={() => setShowNearestCyberForm(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
@@ -1173,7 +1182,7 @@ export default function CitizenLinkAfrica() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nearby Cybercafés & Print Points</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nearby Cybercafés &amp; Print Points</p>
                 {[
                   { name: 'Cyber Hub Kenya', dist: '0.3 km', address: 'Tom Mboya Street' },
                   { name: 'Digital Point Cyber', dist: '0.8 km', address: 'Moi Avenue' },
@@ -1210,7 +1219,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* Coming Soon */}
       {showComingSoon && (
         <ModalOverlay onClose={() => setShowComingSoon(false)} size="large">
           <div className="text-center">
@@ -1234,7 +1242,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* KRA Popup */}
       {showKRAPopup && (
         <ModalOverlay onClose={() => setShowKRAPopup(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
@@ -1312,12 +1319,19 @@ export default function CitizenLinkAfrica() {
                 />
               </div>
 
-              <div className="flex justify-center my-2">
+              <div className="flex justify-end my-2">
                 <Turnstile
                   ref={obligationsTurnstileRef}
                   siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                  onSuccess={(token) => setObligationsTurnstileToken(token)}
-                  onExpire={() => setObligationsTurnstileToken(null)}
+                  onSuccess={(token) => {
+                    obligationsTurnstileTokenRef.current = token
+                    setObligationsTurnstileToken(token)
+                    setObligationsError('')
+                  }}
+                  onExpire={() => {
+                    obligationsTurnstileTokenRef.current = null
+                    setObligationsTurnstileToken(null)
+                  }}
                   options={{ theme: 'light' }}
                 />
               </div>
@@ -1432,12 +1446,19 @@ export default function CitizenLinkAfrica() {
                 />
               </div>
 
-              <div className="flex justify-center my-2">
+              <div className="flex justify-end my-2">
                 <Turnstile
                   ref={verifyTurnstileRef}
                   siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                  onSuccess={(token) => setVerifyTurnstileToken(token)}
-                  onExpire={() => setVerifyTurnstileToken(null)}
+                  onSuccess={(token) => {
+                    verifyTurnstileTokenRef.current = token
+                    setVerifyTurnstileToken(token)
+                    setVerifyError('')
+                  }}
+                  onExpire={() => {
+                    verifyTurnstileTokenRef.current = null
+                    setVerifyTurnstileToken(null)
+                  }}
                   options={{ theme: 'light' }}
                 />
               </div>
@@ -1537,7 +1558,6 @@ export default function CitizenLinkAfrica() {
             </p>
           </div>
 
-          {/* ── Mode Toggle: Use KRA PIN or ID ── */}
           <div className="mb-5">
             <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
               Use KRA PIN or ID?
@@ -1568,7 +1588,6 @@ export default function CitizenLinkAfrica() {
             </div>
           </div>
 
-          {/* ── Use ID mode ── */}
           {lookupMode === 'id' && (
             <>
               {pinError && (
@@ -1660,12 +1679,19 @@ export default function CitizenLinkAfrica() {
 
                 {!showPinResult && (
                   <>
-                    <div className="flex justify-center my-2">
+                    <div className="flex justify-end my-2">
                       <Turnstile
                         ref={pinTurnstileRef}
                         siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                        onSuccess={(token) => setPinTurnstileToken(token)}
-                        onExpire={() => setPinTurnstileToken(null)}
+                        onSuccess={(token) => {
+                          pinTurnstileTokenRef.current = token
+                          setPinTurnstileToken(token)
+                          setPinError('')
+                        }}
+                        onExpire={() => {
+                          pinTurnstileTokenRef.current = null
+                          setPinTurnstileToken(null)
+                        }}
                         options={{ theme: 'light' }}
                       />
                     </div>
@@ -1752,7 +1778,6 @@ export default function CitizenLinkAfrica() {
                     </div>
                   )}
 
-                  {/* Reprint Flow — Pending */}
                   {reprintFlow === 'pending' && (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
                       <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-200">
@@ -1768,7 +1793,6 @@ export default function CitizenLinkAfrica() {
                     </div>
                   )}
 
-                  {/* Reprint Flow — Success */}
                   {reprintFlow === 'success' && reprintSuccess && (
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
                       <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100">
@@ -1796,7 +1820,6 @@ export default function CitizenLinkAfrica() {
                     </div>
                   )}
 
-                  {/* Reprint Flow — Error */}
                   {reprintFlow === 'error' && reprintError && (
                     <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
                       <div className="flex items-start gap-2">
@@ -1815,7 +1838,6 @@ export default function CitizenLinkAfrica() {
                     </div>
                   )}
 
-                  {/* Reprint KRA Certificate button */}
                   {reprintFlow === 'idle' && isReprintWindowOpen() && (
                     <button
                       onClick={handleOpenReprintForm}
@@ -1837,7 +1859,6 @@ export default function CitizenLinkAfrica() {
             </>
           )}
 
-          {/* ── Use KRA PIN mode ── */}
           {lookupMode === 'pin' && (
             <>
               {reprintOnlyError && (
@@ -2004,7 +2025,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* ════════════ REPRINT FORM (ID mode) ════════════ */}
       {showReprintForm && (
         <ModalOverlay onClose={() => { setShowReprintForm(false); resetReprintForm() }} size="compact">
           <div className="mb-4">
@@ -2126,7 +2146,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* Payment Modal */}
       {showPayment && (
         <ModalOverlay onClose={() => setShowPayment(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
@@ -2159,7 +2178,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* Success Modal */}
       {showSuccess && (
         <ModalOverlay onClose={() => setShowSuccess(false)} size="large">
           <div className="text-center">
@@ -2179,7 +2197,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* Track Request Modal */}
       {showCheckStatus && (
         <ModalOverlay onClose={() => setShowCheckStatus(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
@@ -2214,7 +2231,6 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* Order Result Modal */}
       {showOrderResult && (
         <ModalOverlay onClose={() => { setShowOrderResult(false); setOrderStatus('') }} size="large">
           <div className="text-center">
