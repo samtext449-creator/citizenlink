@@ -872,7 +872,8 @@ export default function CitizenLinkAfrica() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
       {/* ──────── HEADER ──────── */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 shadow-lg w-full">
+      <header className="sticky top-0 z-50 w-full bg-gradient-to-br from-blue-100/50 via-indigo-50/50 to-purple-50/50 backdrop-blur-md">
+        {/* Announcement Bar */}
         <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
@@ -884,81 +885,156 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center flex-shrink-0">
-              <span className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white whitespace-nowrap">
-                Taxflow <span className="text-yellow-300">Africa</span>
+        {/* Main Nav Container */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="bg-white rounded-full shadow-lg shadow-blue-900/5 border border-white/50 px-4 sm:px-6 py-2.5 flex items-center justify-between">
+            
+            {/* Logo */}
+            <Link href="/" className="flex items-center flex-shrink-0">
+              <span className="text-2xl font-bold tracking-tighter text-[#0a2540]">
+                HMH<span className="text-blue-600">.</span>
               </span>
-            </div>
+            </Link>
 
-            <div className="relative flex items-center gap-1 sm:gap-2">
+            {/* Center Nav Links (Desktop) */}
+            <nav className="hidden lg:flex items-center space-x-8">
+              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1">
+                Leistungen <ChevronRight className="w-4 h-4 rotate-90" />
+              </button>
+              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+                Projekte
+              </button>
+              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1">
+                Agentur <ChevronRight className="w-4 h-4 rotate-90" />
+              </button>
+              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+                Insights
+              </button>
+              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+                Kontakt
+              </button>
+            </nav>
+
+            {/* Right Action Area */}
+            <div className="flex items-center gap-3 sm:gap-4">
+              
+              {/* CTA Button */}
               <button
-                onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
-                className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
-                aria-label="Notifications"
+                onClick={() => {
+                  // Triggering the generic KRA services menu or specific flow
+                  setShowKRAPopup(true)
+                }}
+                className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#1a3a5c] text-white text-xs sm:text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm"
               >
-                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-                {hasUnread && (
-                  <span className="absolute top-1 right-1 h-2 w-2 sm:h-2.5 sm:w-2.5 bg-red-500 rounded-full border-2 border-blue-600"></span>
-                )}
+                Projekt anfragen
               </button>
 
+              {/* Language Toggle (Static Demo) */}
+              <div className="hidden sm:flex items-center gap-1 text-xs font-medium text-gray-500">
+                <span className="text-[#0a2540] font-bold cursor-pointer">DE</span>
+                <span>|</span>
+                <span className="hover:text-gray-900 cursor-pointer">EN</span>
+              </div>
+
+              {/* Search Icon */}
               <button
-                className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+                onClick={() => setShowCheckStatus(true)}
+                className="p-1.5 text-gray-700 hover:text-blue-600 transition-colors"
+                aria-label="Search"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+
+              {/* Notifications (Moved from old layout) */}
+              <div className="relative">
+                <button
+                  onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
+                  className="relative p-1.5 text-gray-700 hover:text-blue-600 transition-colors"
+                  aria-label="Notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                  {hasUnread && (
+                    <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full border border-white"></span>
+                  )}
+                </button>
+                {isNotificationOpen && (
+                  <div className="absolute right-0 top-10 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                    <div className="p-3 bg-gray-50 border-b border-gray-100">
+                      <h4 className="font-semibold text-gray-800 text-sm">Your Requests</h4>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-4 text-center text-gray-400 text-sm">No requests yet</div>
+                      ) : (
+                        notifications.map((n, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleNotificationClick(n.id)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-start gap-3"
+                          >
+                            <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'Ready' ? 'bg-green-500' : 'bg-blue-500'}`} />
+                            <div>
+                              <p className="text-sm font-medium text-gray-800">{n.title}</p>
+                              <p className={`text-xs ${n.status === 'Ready' ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>{n.status}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Hamburger Menu (Mobile & Desktop) */}
+              <button
+                className="p-1.5 text-gray-700 hover:text-blue-600 transition-colors"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="Menu"
               >
-                <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                <Menu className="h-6 w-6" />
               </button>
-
-              {isNotificationOpen && (
-                <div className="absolute right-0 top-11 sm:top-12 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                  <div className="p-3 bg-gray-50 border-b border-gray-100">
-                    <h4 className="font-semibold text-gray-800 text-sm">Your Requests</h4>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-gray-400 text-sm">No requests yet</div>
-                    ) : (
-                      notifications.map((n, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleNotificationClick(n.id)}
-                          className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-start gap-3"
-                        >
-                          <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'Ready' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{n.title}</p>
-                            <p className={`text-xs ${n.status === 'Ready' ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>{n.status}</p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
-
-          {isMobileMenuOpen && (
-            <div className="md:hidden py-3 border-t border-white/10">
-              <p className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider px-2 mb-2">Our Services</p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {serviceCards.map((card, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
-                    className="w-full text-left px-3 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-3"
-                  >
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-400' : 'bg-gray-400'}`} />
-                    <span className="text-sm font-medium text-white">{card.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Mobile / Overlay Menu */}
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 top-[100px] z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <div className="absolute right-4 top-4 w-[calc(100vw-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4 border-b pb-4">
+                 <span className="font-bold text-lg text-[#0a2540]">Menu</span>
+                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400 hover:text-gray-600">
+                   <X className="w-5 h-5" />
+                 </button>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-2 mb-4">
+                 <p className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider px-2 mb-2">Our Services</p>
+                 {serviceCards.map((card, i) => (
+                   <button
+                     key={i}
+                     onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
+                     className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors flex items-center gap-3"
+                   >
+                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                     <span className="text-sm font-medium text-gray-800">{card.title}</span>
+                     {card.tag && <span className="ml-auto text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">{card.tag}</span>}
+                   </button>
+                 ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowKRAPopup(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full bg-[#0a2540] text-white text-sm font-semibold py-3 rounded-xl"
+              >
+                Projekt anfragen
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ──────── MAIN CONTENT ──────── */}
