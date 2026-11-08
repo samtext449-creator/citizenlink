@@ -103,6 +103,7 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [agreedToTerms, setAgreedToTerms] = useState(false) // NEW: Mandatory terms state
 
   // Verify KRA PIN
   const [showVerifyForm, setShowVerifyForm] = useState(false)
@@ -133,11 +134,6 @@ export default function CitizenLinkAfrica() {
 
   // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
   const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
-
-  // ── Opt-in (compact) ──
-  const [optIn, setOptIn] = useState(false)
-  const [subEmail, setSubEmail] = useState('')
-  const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   // ── Reprint Form ──
   const [showReprintForm, setShowReprintForm] = useState(false)
@@ -305,25 +301,14 @@ export default function CitizenLinkAfrica() {
     )
   }
 
-  const fireSubscribe = (identifier: string, fullName: string) => {
-    if (!optIn || !subEmail.trim()) return
-    setSubscribeStatus('saving')
-
-    console.log('[XecoNotify MOCK] subscribe payload:', {
-      full_name: fullName,
-      identifier,
-      email: subEmail.trim(),
-      source_app: 'taxflow_africa',
-      opt_in_marketing: true,
-      channels: ['email'],
-    })
-
-    setTimeout(() => setSubscribeStatus('saved'), 400)
-  }
-
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!pinId.trim()) return
+
+    if (!agreedToTerms) {
+      setPinError('You must agree to the Terms and Conditions to proceed.')
+      return
+    }
 
     const token = pinTurnstileTokenRef.current
 
@@ -332,16 +317,10 @@ export default function CitizenLinkAfrica() {
       return
     }
 
-    if (optIn && !subEmail.trim()) {
-      setPinError('Please enter your email to receive updates, or uncheck the box.')
-      return
-    }
-
     setIsLoadingPin(true)
     setShowPinResult(false)
     setPinError('')
     setPinResult(null)
-    setSubscribeStatus('idle')
 
     try {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
@@ -366,8 +345,6 @@ export default function CitizenLinkAfrica() {
       }
       setPinResult(result)
       setShowPinResult(true)
-
-      fireSubscribe(result.kraPin, result.taxpayerName)
     } catch (err) {
       console.error('[KRA PIN] fetch error', err)
       setPinError('Network error. Please check your connection and try again.')
@@ -703,9 +680,7 @@ export default function CitizenLinkAfrica() {
     setPinError('')
     setPinResult(null)
     setCopied(false)
-    setOptIn(false)
-    setSubEmail('')
-    setSubscribeStatus('idle')
+    setAgreedToTerms(false) // Reset terms agreement
     setReprintOnlyEmail('')
     setReprintOnlyPaymentNo('')
     setReprintOnlyError('')
@@ -1668,43 +1643,26 @@ export default function CitizenLinkAfrica() {
                     <label className="flex items-start gap-3 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={optIn}
+                        checked={agreedToTerms}
                         onChange={(e) => {
-                          setOptIn(e.target.checked)
-                          if (!e.target.checked) setSubEmail('')
-                          setSubscribeStatus('idle')
+                          setAgreedToTerms(e.target.checked)
+                          if (e.target.checked) setPinError('')
                         }}
                         className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0a2540] focus:ring-[#0a2540] cursor-pointer"
                       />
                       <span className="text-xs sm:text-sm text-slate-600 leading-snug">
-                        Update me when other services are live
+                        I agree to submit my information and accept the{' '}
+                        <a
+                          href="/terms"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Terms and Conditions
+                        </a>.
                       </span>
                     </label>
-
-                    {optIn && (
-                      <div className="mt-3">
-                        <label className="block text-[11px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                          Email <span className="text-slate-400 font-normal normal-case">(optional)</span>
-                        </label>
-                        <input
-                          type="email"
-                          value={subEmail}
-                          onChange={(e) => setSubEmail(e.target.value)}
-                          placeholder="you@example.com"
-                          className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
-                        />
-                        {subscribeStatus === 'saved' && (
-                          <p className="mt-1.5 text-[11px] text-emerald-600 flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" /> You're subscribed.
-                          </p>
-                        )}
-                        {subscribeStatus === 'error' && (
-                          <p className="mt-1.5 text-[11px] text-red-500">
-                            Couldn't save your preference. You can try again.
-                          </p>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1728,9 +1686,9 @@ export default function CitizenLinkAfrica() {
                     </div>
                     <button
                       type="submit"
-                      disabled={isLoadingPin || !pinTurnstileToken}
+                      disabled={isLoadingPin || !pinTurnstileToken || !agreedToTerms}
                       className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
-                        isLoadingPin || !pinTurnstileToken
+                        isLoadingPin || !pinTurnstileToken || !agreedToTerms
                           ? 'bg-slate-300 text-white cursor-wait'
                           : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
                       }`}
@@ -1799,15 +1757,6 @@ export default function CitizenLinkAfrica() {
                       </div>
                     </div>
                   </div>
-
-                  {subscribeStatus === 'saved' && (
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs sm:text-sm text-emerald-700">
-                        You'll get an email when new services go live.
-                      </p>
-                    </div>
-                  )}
 
                   {reprintFlow === 'pending' && (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
