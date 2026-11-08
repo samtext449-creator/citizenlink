@@ -69,6 +69,47 @@ interface Obligation {
 
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
 
+// ─── Decorative hero lines (design only) ─────────────
+function HeroLines() {
+  const paths = [
+    'M0 250 C 180 190, 360 300, 800 215',
+    'M0 255 C 200 215, 380 290, 800 240',
+    'M0 260 C 220 250, 400 280, 800 262',
+    'M0 265 C 220 290, 420 270, 800 285',
+    'M0 270 C 200 330, 400 280, 800 310',
+    'M0 275 C 180 370, 380 300, 800 335',
+    'M0 245 C 200 150, 380 280, 800 190',
+    'M0 280 C 160 410, 360 320, 800 365',
+    'M0 240 C 220 110, 400 270, 800 160',
+    'M0 285 C 140 450, 340 340, 800 400',
+  ]
+  const dots = [
+    [520, 238], [610, 262], [455, 300], [690, 215], [560, 330], [740, 285], [400, 255], [650, 345], [300, 270],
+  ]
+  return (
+    <svg
+      className="pointer-events-none absolute right-0 top-0 h-full w-full sm:w-[70%] opacity-60 sm:opacity-100"
+      viewBox="0 0 800 500"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="heroLine" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0" />
+          <stop offset="55%" stopColor="#38bdf8" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.95" />
+        </linearGradient>
+      </defs>
+      {paths.map((d, i) => (
+        <path key={i} d={d} fill="none" stroke="url(#heroLine)" strokeWidth="1.1" />
+      ))}
+      {dots.map(([cx, cy], i) => (
+        <circle key={i} cx={cx} cy={cy} r="2.2" fill="#67e8f9" opacity="0.85" />
+      ))}
+    </svg>
+  )
+}
+
 export default function CitizenLinkAfrica() {
   const [activeCard, setActiveCard] = useState<number | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
@@ -121,11 +162,11 @@ export default function CitizenLinkAfrica() {
   const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
   const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string | null>(null)
   const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
-  
+
   const pinTurnstileTokenRef = useRef<string | null>(null)
   const verifyTurnstileTokenRef = useRef<string | null>(null)
   const obligationsTurnstileTokenRef = useRef<string | null>(null)
-  
+
   const pinTurnstileRef = useRef<any>(null)
   const verifyTurnstileRef = useRef<any>(null)
   const obligationsTurnstileRef = useRef<any>(null)
@@ -383,8 +424,8 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          taxpayerType, 
+        body: JSON.stringify({
+          taxpayerType,
           taxpayerId: pinId.trim(),
           turnstileToken: token
         }),
@@ -438,7 +479,7 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           kraPin: cleanPin,
           turnstileToken: token
         }),
@@ -500,7 +541,7 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           kraPin: cleanPin,
           turnstileToken: token
         }),
@@ -870,351 +911,320 @@ export default function CitizenLinkAfrica() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
-      {/* ──────── HEADER ──────── */}
-      <header className="sticky top-0 z-50 w-full bg-gradient-to-br from-blue-100/50 via-indigo-50/50 to-purple-50/50 backdrop-blur-md">
-        {/* Announcement Bar */}
-        <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
+    <div className="min-h-screen flex flex-col bg-[#e3e8f0]">
+      {/* ──────── HEADER (floating white pill) ──────── */}
+      <header className="sticky top-0 z-50 w-full px-3 sm:px-5 pt-3 pb-2 bg-[#e3e8f0]/85 backdrop-blur-md">
+        <div className="max-w-[1400px] mx-auto">
+          {/* Partner notice */}
+          <div className="mb-2 rounded-full bg-amber-500/95 px-3 py-1 sm:py-1.5">
+            <div className="flex items-center justify-center gap-2">
               <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-900 animate-pulse flex-shrink-0" />
               <span className="text-[10px] sm:text-xs font-medium text-amber-900 text-center leading-tight">
                 Authorized Ushuru Mashinani Partner: Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
               </span>
             </div>
           </div>
-        </div>
 
-        {/* Main Nav Container */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="bg-white rounded-full shadow-lg shadow-blue-900/5 border border-white/50 px-4 sm:px-6 py-2.5 flex items-center justify-between">
-            
-            {/* Logo */}
-            <Link href="/" className="flex items-center flex-shrink-0">
-              <span className="text-2xl font-bold tracking-tighter text-[#0a2540]">
-                HMH<span className="text-blue-600">.</span>
+          {/* Nav pill */}
+          <div className="relative bg-white rounded-full shadow-[0_2px_14px_rgba(15,40,100,0.08)] px-4 sm:px-8 h-14 sm:h-[68px] flex items-center justify-between">
+            <div className="flex items-center flex-shrink-0">
+              <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#0a3fb0] whitespace-nowrap">
+                Taxflow <span className="text-sky-500">Africa</span>
               </span>
-            </Link>
+            </div>
 
-            {/* Center Nav Links (Desktop) */}
-            <nav className="hidden lg:flex items-center space-x-8">
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1">
-                Leistungen <ChevronRight className="w-4 h-4 rotate-90" />
-              </button>
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-                Projekte
-              </button>
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1">
-                Agentur <ChevronRight className="w-4 h-4 rotate-90" />
-              </button>
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-                Insights
-              </button>
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-                Kontakt
-              </button>
+            {/* Center links (existing active services) */}
+            <nav className="hidden md:flex items-center gap-7 lg:gap-9">
+              {serviceCards.filter((c) => c.isActive).map((card, i) => (
+                <button
+                  key={i}
+                  onClick={card.onClick}
+                  className="text-sm font-medium text-gray-900 hover:text-[#0a3fb0] transition-colors whitespace-nowrap"
+                >
+                  {card.title}
+                </button>
+              ))}
             </nav>
 
-            {/* Right Action Area */}
-            <div className="flex items-center gap-3 sm:gap-4">
-              
-              {/* CTA Button */}
-              <button
-                onClick={() => {
-                  // Triggering the generic KRA services menu or specific flow
-                  setShowKRAPopup(true)
-                }}
-                className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#1a3a5c] text-white text-xs sm:text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm"
-              >
-                Projekt anfragen
-              </button>
-
-              {/* Language Toggle (Static Demo) */}
-              <div className="hidden sm:flex items-center gap-1 text-xs font-medium text-gray-500">
-                <span className="text-[#0a2540] font-bold cursor-pointer">DE</span>
-                <span>|</span>
-                <span className="hover:text-gray-900 cursor-pointer">EN</span>
-              </div>
-
-              {/* Search Icon */}
+            <div className="flex items-center gap-1.5 sm:gap-3">
               <button
                 onClick={() => setShowCheckStatus(true)}
-                className="p-1.5 text-gray-700 hover:text-blue-600 transition-colors"
-                aria-label="Search"
+                className="hidden sm:inline-flex items-center rounded-full bg-[#0a3fb0] hover:bg-[#08338d] text-white text-sm font-semibold px-5 py-2.5 transition-colors"
               >
-                <Search className="h-5 w-5" />
+                Track Request
               </button>
 
-              {/* Notifications (Moved from old layout) */}
-              <div className="relative">
-                <button
-                  onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
-                  className="relative p-1.5 text-gray-700 hover:text-blue-600 transition-colors"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                  {hasUnread && (
-                    <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full border border-white"></span>
-                  )}
-                </button>
-                {isNotificationOpen && (
-                  <div className="absolute right-0 top-10 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                    <div className="p-3 bg-gray-50 border-b border-gray-100">
-                      <h4 className="font-semibold text-gray-800 text-sm">Your Requests</h4>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-gray-400 text-sm">No requests yet</div>
-                      ) : (
-                        notifications.map((n, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleNotificationClick(n.id)}
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-start gap-3"
-                          >
-                            <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'Ready' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{n.title}</p>
-                              <p className={`text-xs ${n.status === 'Ready' ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>{n.status}</p>
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Hamburger Menu (Mobile & Desktop) */}
               <button
-                className="p-1.5 text-gray-700 hover:text-blue-600 transition-colors"
+                onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
+                className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Notifications"
+              >
+                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-[#0a3fb0]" />
+                {hasUnread && (
+                  <span className="absolute top-1 right-1 h-2 w-2 sm:h-2.5 sm:w-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
+              </button>
+
+              <button
+                className="md:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="Menu"
               >
-                <Menu className="h-6 w-6" />
+                <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-[#0a3fb0]" />
               </button>
+
+              {isNotificationOpen && (
+                <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                  <div className="p-3 bg-gray-50 border-b border-gray-100">
+                    <h4 className="font-semibold text-gray-800 text-sm">Your Requests</h4>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-400 text-sm">No requests yet</div>
+                    ) : (
+                      notifications.map((n, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleNotificationClick(n.id)}
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-start gap-3"
+                        >
+                          <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'Ready' ? 'bg-green-500' : 'bg-blue-500'}`} />
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{n.title}</p>
+                            <p className={`text-xs ${n.status === 'Ready' ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>{n.status}</p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Mobile menu */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden mt-2 rounded-3xl bg-white shadow-lg p-3">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Our Services</p>
+              <div className="grid grid-cols-1 gap-1.5 max-h-[60vh] overflow-y-auto">
+                {serviceCards.map((card, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-blue-50 transition-colors flex items-center gap-3"
+                  >
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                    <span className="text-sm font-medium text-gray-800">{card.title}</span>
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setShowCheckStatus(true); setIsMobileMenuOpen(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl bg-[#0a3fb0] text-white text-sm font-semibold"
+                >
+                  Track Request
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-
-        {/* Mobile / Overlay Menu */}
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 top-[100px] z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
-            <div className="absolute right-4 top-4 w-[calc(100vw-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-4 border-b pb-4">
-                 <span className="font-bold text-lg text-[#0a2540]">Menu</span>
-                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400 hover:text-gray-600">
-                   <X className="w-5 h-5" />
-                 </button>
-              </div>
-              
-              <div className="grid grid-cols-1 gap-2 mb-4">
-                 <p className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider px-2 mb-2">Our Services</p>
-                 {serviceCards.map((card, i) => (
-                   <button
-                     key={i}
-                     onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
-                     className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors flex items-center gap-3"
-                   >
-                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                     <span className="text-sm font-medium text-gray-800">{card.title}</span>
-                     {card.tag && <span className="ml-auto text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">{card.tag}</span>}
-                   </button>
-                 ))}
-              </div>
-
-              <button
-                onClick={() => {
-                  setShowKRAPopup(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full bg-[#0a2540] text-white text-sm font-semibold py-3 rounded-xl"
-              >
-                Projekt anfragen
-              </button>
-            </div>
-          </div>
-        )}
       </header>
 
       {/* ──────── MAIN CONTENT ──────── */}
-      <main className="flex-1 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <main className="flex-1 w-full px-3 sm:px-5 pb-4">
+        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-5">
           <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
 
-              <div className="max-w-2xl mx-auto lg:mx-0">
-                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-[11px] sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6">
-                  <span>Official KRA Ushuru Mashinani Partner</span>
-                </div>
+            {/* ── HERO (navy panel) ── */}
+            <section className="relative overflow-hidden rounded-[24px] sm:rounded-[32px] bg-gradient-to-br from-[#0a2f8f] via-[#052070] to-[#021457]">
+              <div className="pointer-events-none absolute -right-24 top-10 h-[420px] w-[420px] rounded-full bg-blue-500/20 blur-3xl" />
+              <div className="pointer-events-none absolute right-1/4 -bottom-32 h-[360px] w-[360px] rounded-full bg-sky-400/10 blur-3xl" />
+              <HeroLines />
 
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-[1.15] sm:leading-[1.1] mb-4 sm:mb-6 tracking-tight">
-                  KRA Services
-                  <br />
-                  <span className="relative inline-block">
-                    <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <div className="relative px-6 sm:px-12 lg:px-[9%] py-14 sm:py-20 lg:py-28">
+                <div className="max-w-2xl">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/60 bg-white/5 px-3.5 py-1.5 mb-5 sm:mb-6">
+                    <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
+                    <span className="text-[10px] sm:text-xs font-bold tracking-wider text-white uppercase">
+                      Official KRA Ushuru Mashinani Partner
+                    </span>
+                  </div>
+
+                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-white leading-[1.1] tracking-tight mb-5 sm:mb-6">
+                    KRA Services
+                    <br />
+                    <span className="bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300 bg-clip-text text-transparent">
                       Brought Closer to You.
                     </span>
-                    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-blue-600/40 via-indigo-600/40 to-purple-600/40 rounded-full blur-sm" />
-                  </span>
-                </h1>
+                  </h1>
 
-                <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-4 sm:mb-5 leading-relaxed">
-                  Fulfilling your tax obligations shouldn't be complicated. Through the{' '}
-                  <span className="font-semibold text-gray-800">Ushuru Mashinani</span> initiative,
-                  Taxflow Africa simplifies KRA processes so you can file returns, get your KRA PIN,
-                  and stay compliant from your phone or computer.
-                </p>
-
-                <div className="space-y-2 sm:space-y-2.5 mb-4 sm:mb-6">
-                  {[
-                    'Find My KRA PIN',
-                    'Filing Nil, Individual & Business Returns',
-                    'Tax Compliance Certificates (TCC)',
-                    'iTax Profile Updates (Phone & Email)',
-                    'eTIMS Onboarding & Assistance',
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm sm:text-base text-gray-700">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                        <svg className="h-3 w-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="w-full">
-                <div className="lg:hidden">
-                  <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                    Select a service to begin:
+                  <p className="text-sm sm:text-base lg:text-lg text-blue-50/90 mb-5 leading-relaxed lg:leading-8">
+                    Fulfilling your tax obligations shouldn't be complicated. Through the{' '}
+                    <span className="font-semibold text-white">Ushuru Mashinani</span> initiative,
+                    Taxflow Africa simplifies KRA processes so you can file returns, get your KRA PIN,
+                    and stay compliant from your phone or computer.
                   </p>
-                  <div className="space-y-2">
-                    {serviceCards.map((card, i) => (
-                      <button
-                        key={i}
-                        onClick={card.onClick}
-                        className={`w-full flex items-center gap-3 p-3.5 sm:p-4 rounded-xl border shadow-sm active:scale-[0.98] transition-transform ${
-                          card.isActive
-                            ? 'bg-white border-gray-200 hover:border-sky-300 hover:shadow-md'
-                            : 'bg-gray-50 border-gray-200 opacity-70'
-                        }`}
-                      >
-                        <FileText className={`h-5 w-5 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
-                        <span className={`text-sm font-semibold text-left flex-1 ${card.isActive ? 'text-gray-800' : 'text-gray-500'}`}>
-                          {card.title}
-                        </span>
-                        {card.isActive && card.tag && (
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
-                            card.tag === 'NEW' 
-                              ? 'text-red-700 bg-red-100' 
-                              : 'text-sky-700 bg-sky-100'
-                          }`}>
-                            {card.tag}
-                          </span>
-                        )}
-                        {!card.isActive && (
-                          <span className="text-[9px] font-semibold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                            Soon
-                          </span>
-                        )}
-                        <ChevronRight className={`h-4 w-4 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
-                      </button>
+
+                  <div className="space-y-2 sm:space-y-2.5 mb-7 sm:mb-8">
+                    {[
+                      'Find My KRA PIN',
+                      'Filing Nil, Individual & Business Returns',
+                      'Tax Compliance Certificates (TCC)',
+                      'iTax Profile Updates (Phone & Email)',
+                      'eTIMS Onboarding & Assistance',
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm sm:text-base text-blue-50">
+                        <div className="flex-shrink-0 w-5 h-5 rounded-full bg-sky-400/20 ring-1 ring-sky-300/40 flex items-center justify-center">
+                          <svg className="h-3 w-3 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <span>{item}</span>
+                      </div>
                     ))}
                   </div>
-                </div>
 
-                <div className="hidden lg:block">
-                  <div className="mb-4 text-center">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-700 inline-flex items-center gap-3">
-                      <span className="w-12 h-px bg-blue-300"></span>
-                      Our Services
-                      <span className="w-12 h-px bg-blue-300"></span>
-                    </h3>
-                  </div>
-
-                  <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/60 rounded-3xl shadow-xl shadow-blue-200/40 ring-1 ring-blue-100/80 overflow-hidden">
-                    <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-                    <div className="pointer-events-none absolute -top-24 -right-24 w-56 h-56 rounded-full bg-gradient-to-br from-blue-300/20 to-purple-300/20 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-24 -left-24 w-56 h-56 rounded-full bg-gradient-to-br from-indigo-300/20 to-sky-300/20 blur-3xl" />
-
-                    <div className="relative p-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        {serviceCards.map((card, i) => (
-                          <div
-                            key={i}
-                            className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-80' : ''}`}
-                            onMouseEnter={() => setActiveCard(i)}
-                            onMouseLeave={() => setActiveCard(null)}
-                            onClick={card.onClick}
-                          >
-                            <div className={`relative border rounded-2xl p-4 h-full flex flex-col justify-between overflow-hidden transition-all duration-300 ${
-                              card.isActive
-                                ? `${card.color} hover:shadow-lg hover:-translate-y-0.5`
-                                : 'bg-slate-50/80 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100/80'
-                            }`}>
-                              <div className="relative z-10">
-                                <div className="flex items-start justify-between gap-2 mb-1.5">
-                                  <h3 className={`font-bold text-sm sm:text-base ${card.isActive ? 'text-gray-900' : 'text-slate-500'}`}>
-                                    {card.title}
-                                  </h3>
-                                  {card.isActive && card.tag && (
-                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
-                                      card.tag === 'NEW' 
-                                        ? 'text-red-700 bg-red-100 ring-1 ring-red-200' 
-                                        : 'text-sky-700 bg-sky-100 ring-1 ring-sky-200'
-                                    }`}>
-                                      {card.tag}
-                                    </span>
-                                  )}
-                                  {!card.isActive && (
-                                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                                      Soon
-                                    </span>
-                                  )}
-                                </div>
-                                <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-gray-500' : 'text-slate-400'}`}>
-                                  {card.desc}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => setShowFindPINForm(true)}
+                      className="rounded-full bg-white text-[#0a3fb0] text-sm font-semibold px-6 py-3 hover:bg-blue-50 transition-colors"
+                    >
+                      Find My KRA PIN
+                    </button>
+                    <button
+                      onClick={() => setShowVerifyForm(true)}
+                      className="rounded-full border border-white/50 text-white text-sm font-semibold px-6 py-3 hover:bg-white/10 transition-colors"
+                    >
+                      Verify KRA PIN
+                    </button>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
+
+          {/* ── SERVICES ── */}
+          <section
+            className={`rounded-[24px] sm:rounded-[32px] bg-white shadow-[0_2px_14px_rgba(15,40,100,0.06)] px-4 sm:px-8 lg:px-10 py-6 sm:py-8 transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+          >
+            {/* Mobile list */}
+            <div className="lg:hidden">
+              <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                Select a service to begin:
+              </p>
+              <div className="space-y-2">
+                {serviceCards.map((card, i) => (
+                  <button
+                    key={i}
+                    onClick={card.onClick}
+                    className={`w-full flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl border active:scale-[0.98] transition-transform ${
+                      card.isActive
+                        ? 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md'
+                        : 'bg-gray-50 border-gray-200 opacity-70'
+                    }`}
+                  >
+                    <FileText className={`h-5 w-5 flex-shrink-0 ${card.isActive ? 'text-[#0a3fb0]' : 'text-gray-300'}`} />
+                    <span className={`text-sm font-semibold text-left flex-1 ${card.isActive ? 'text-gray-800' : 'text-gray-500'}`}>
+                      {card.title}
+                    </span>
+                    {card.isActive && card.tag && (
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                        card.tag === 'NEW'
+                          ? 'text-red-700 bg-red-100'
+                          : 'text-sky-700 bg-sky-100'
+                      }`}>
+                        {card.tag}
+                      </span>
+                    )}
+                    {!card.isActive && (
+                      <span className="text-[9px] font-semibold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                        Soon
+                      </span>
+                    )}
+                    <ChevronRight className={`h-4 w-4 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Desktop grid */}
+            <div className="hidden lg:block">
+              <div className="mb-6 flex items-end justify-between">
+                <h3 className="text-2xl font-semibold text-gray-900 tracking-tight">Our Services</h3>
+                <p className="text-sm text-gray-500">Pick a service to get started</p>
+              </div>
+
+              <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+                {serviceCards.map((card, i) => (
+                  <div
+                    key={i}
+                    className={`relative cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-80' : ''}`}
+                    onMouseEnter={() => setActiveCard(i)}
+                    onMouseLeave={() => setActiveCard(null)}
+                    onClick={card.onClick}
+                  >
+                    <div className={`relative border rounded-2xl p-5 h-full min-h-[120px] flex flex-col justify-between overflow-hidden transition-all duration-300 ${
+                      card.isActive
+                        ? `${card.color} hover:shadow-lg hover:-translate-y-0.5`
+                        : 'bg-slate-50/80 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100/80'
+                    }`}>
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <h3 className={`font-semibold text-sm sm:text-base ${card.isActive ? 'text-gray-900' : 'text-slate-500'}`}>
+                            {card.title}
+                          </h3>
+                          {card.isActive && card.tag && (
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                              card.tag === 'NEW'
+                                ? 'text-red-700 bg-red-100 ring-1 ring-red-200'
+                                : 'text-sky-700 bg-sky-100 ring-1 ring-sky-200'
+                            }`}>
+                              {card.tag}
+                            </span>
+                          )}
+                          {!card.isActive && (
+                            <span className="text-[9px] font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                              Soon
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-gray-500' : 'text-slate-400'}`}>
+                          {card.desc}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
         </div>
       </main>
 
       {/* ──────── FOOTER ──────── */}
-      <footer className="w-full bg-slate-900 text-slate-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
-            <span className="font-bold text-white">
-              Taxflow <span className="text-yellow-300">Africa</span>
-            </span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">
-              © {new Date().getFullYear()} All rights reserved.
-            </span>
-            <span className="text-slate-600">|</span>
-            <Link href="/terms" className="text-slate-300 hover:text-white transition-colors">
-              Terms &amp; Conditions
-            </Link>
-            <span className="text-slate-600">|</span>
-            <Link href="/privacy" className="text-slate-300 hover:text-white transition-colors">
-              Privacy Policy
-            </Link>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">
-              Official KRA Ushuru Mashinani Partner.
-            </span>
+      <footer className="w-full px-3 sm:px-5 pb-3">
+        <div className="max-w-[1400px] mx-auto rounded-[20px] sm:rounded-full bg-[#021457] text-blue-100">
+          <div className="px-4 sm:px-8 py-3.5">
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
+              <span className="font-bold text-white">
+                Taxflow <span className="text-sky-300">Africa</span>
+              </span>
+              <span className="text-blue-300/40">|</span>
+              <span className="text-blue-200/80">
+                © {new Date().getFullYear()} All rights reserved.
+              </span>
+              <span className="text-blue-300/40">|</span>
+              <Link href="/terms" className="text-blue-100 hover:text-white transition-colors">
+                Terms &amp; Conditions
+              </Link>
+              <span className="text-blue-300/40">|</span>
+              <Link href="/privacy" className="text-blue-100 hover:text-white transition-colors">
+                Privacy Policy
+              </Link>
+              <span className="text-blue-300/40">|</span>
+              <span className="text-blue-200/80">
+                Official KRA Ushuru Mashinani Partner.
+              </span>
+            </div>
           </div>
         </div>
       </footer>
@@ -2363,7 +2373,7 @@ function ModalOverlay({ children, onClose, size = 'default' }: {
     size === 'compact' ? 'max-w-sm sm:max-w-md' :
     'max-w-sm sm:max-w-md'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-4 sm:p-6 md:p-7 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
         <button
