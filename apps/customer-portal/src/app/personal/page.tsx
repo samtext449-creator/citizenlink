@@ -22,7 +22,12 @@ import {
   ExternalLink,
   Smartphone,
   ShieldCheck,
-  Sparkles,
+  ChevronLeft,
+  FileCheck,
+  Home,
+  UserCheck,
+  Receipt,
+  ChevronDown
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -73,6 +78,7 @@ export default function CitizenLinkAfrica() {
   const [activeCard, setActiveCard] = useState<number | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false)
 
   // Location
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
@@ -724,11 +730,13 @@ export default function CitizenLinkAfrica() {
     { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', hover: 'hover:border-sky-400 hover:shadow-sky-100', onClick: () => setShowFindPINForm(true), isActive: true },
     { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', hover: 'hover:border-violet-400 hover:shadow-violet-100', onClick: () => setShowVerifyForm(true), isActive: true },
     { title: 'Check My Obligations', desc: 'View all your active tax obligations', tag: 'NEW', color: 'bg-emerald-50 border-emerald-200', hover: 'hover:border-emerald-400 hover:shadow-emerald-100', onClick: () => setShowObligationsForm(true), isActive: true },
-    { title: 'P9 / Employment Returns', desc: 'Annual P9 and employment income filing', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
+    { title: 'P9 / Employment Returns', desc: 'Annual P9/employment income filing', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Rental Tax Returns', desc: 'Filing for rental income properties', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Rental Tax Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Verify Supplier', desc: 'Confirm supplier tax compliance status', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Verify Supplier'); setShowComingSoon(true) }, isActive: false },
-    { title: 'Check My Tax Compliance', desc: 'View your overall tax compliance status', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Check My Tax Compliance'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Check My Tax Compliance', desc: 'View your overall tax compliance', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Check My Tax Compliance'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Nil Tax Automation', desc: 'Automate your nil tax returns seamlessly', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Nil Tax Automation'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Landlord Tax Management', desc: 'Manage and file your rental income tax', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Landlord Tax Management'); setShowComingSoon(true) }, isActive: false },
   ]
 
   const handlePaymentSubmit = (e: React.FormEvent) => {
@@ -840,19 +848,25 @@ export default function CitizenLinkAfrica() {
             {/* Center Nav Links (Desktop) */}
             <nav className="hidden lg:flex items-center space-x-8">
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors flex items-center gap-1">
-                Leistungen <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+                Products <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
               </button>
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
-                Projekte
+                Intergration
               </button>
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors flex items-center gap-1">
-                Agentur <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+                Solutions <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
               </button>
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
-                Insights
+                eTIMS
               </button>
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
-                Kontakt
+                Resources
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+                Pricing
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+                Contact
               </button>
             </nav>
 
@@ -864,10 +878,10 @@ export default function CitizenLinkAfrica() {
                 onClick={() => setShowKRAPopup(true)}
                 className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
               >
-                Projekt anfragen
+                Get Started
               </button>
 
-              {/* Language Toggle */}
+              {/* Language Toggle (RESTORED) */}
               <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-slate-400">
                 <span className="text-[#0a2540] font-bold cursor-pointer transition-colors">SW</span>
                 <span className="text-slate-300">|</span>
@@ -883,7 +897,7 @@ export default function CitizenLinkAfrica() {
                 <Search className="h-4 w-4" />
               </button>
 
-              {/* Hamburger Menu */}
+              {/* Hamburger Menu (RESTORED) */}
               <button
                 className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -895,41 +909,45 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
 
-        {/* Mobile / Overlay Menu */}
+        {/* Mobile Drawer (Safaricom Style) */}
         {isMobileMenuOpen && (
-          <div className="fixed inset-0 top-[80px] z-40 bg-slate-900/20 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
-            <div className="absolute right-4 top-4 w-[calc(100vw-2rem)] max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-100 p-5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
-                 <span className="font-bold text-lg text-[#0a2540] tracking-tight">Menu</span>
-                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-slate-600 bg-slate-50 p-1.5 rounded-full">
-                   <X className="w-4 h-4" />
+          <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <div className="absolute right-0 top-0 h-full w-[85vw] max-w-sm bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+              
+              <div className="p-4 border-b border-slate-100 flex justify-start">
+                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-800 hover:text-slate-600 p-1">
+                   <X className="w-6 h-6" />
                  </button>
               </div>
               
-              <div className="grid grid-cols-1 gap-2 mb-6">
-                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1">Our Services</p>
-                 {serviceCards.map((card, i) => (
+              <div className="flex-1 overflow-y-auto">
+                 {[
+                   'My Account',
+                   'M-PESA Global Pay',
+                   'M-PESA Foundation',
+                   'Pamoja Tuungane',
+                   'Safaricom Careers',
+                   'Citizens of the Future',
+                   'Safaricom Foundation',
+                   'Safaricom Golf Tour',
+                   'Safaricom Roaming',
+                   'Safaricom Wholesale',
+                   'Newsroom',
+                   'Safaricom Chapa Dimba'
+                 ].map((item, idx) => (
                    <button
-                     key={i}
-                     onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
-                     className={`w-full text-left px-3 py-3 rounded-xl transition-all flex items-center gap-3 ${card.isActive ? 'hover:bg-slate-50' : 'opacity-60'}`}
+                     key={idx}
+                     onClick={() => {
+                       setComingSoonTitle(item);
+                       setShowComingSoon(true);
+                       setIsMobileMenuOpen(false);
+                     }}
+                     className="w-full text-left px-5 py-4 border-b border-slate-100 text-green-600 font-medium text-sm hover:bg-slate-50 transition-colors"
                    >
-                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                     <span className={`text-sm font-medium ${card.isActive ? 'text-slate-800' : 'text-slate-500'}`}>{card.title}</span>
-                     {card.tag && <span className="ml-auto text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{card.tag}</span>}
+                     {item}
                    </button>
                  ))}
               </div>
-
-              <button
-                onClick={() => {
-                  setShowKRAPopup(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full bg-[#0a2540] text-white text-sm font-semibold py-3.5 rounded-xl hover:bg-[#112d4e] transition-colors"
-              >
-                Projekt anfragen
-              </button>
             </div>
           </div>
         )}
@@ -946,7 +964,6 @@ export default function CitizenLinkAfrica() {
 
               <div className="max-w-2xl mx-auto lg:mx-0">
                 <div className="inline-flex items-center gap-2 bg-white text-blue-700 text-[11px] sm:text-xs font-bold px-3 py-1.5 rounded-full mb-6 shadow-sm ring-1 ring-slate-200/60 uppercase tracking-wide">
-                  <Sparkles className="w-3.5 h-3.5" />
                   <span>Official KRA Ushuru Mashinani Partner</span>
                 </div>
 
@@ -970,8 +987,9 @@ export default function CitizenLinkAfrica() {
                     onClick={() => setShowFindPINForm(true)}
                     className="inline-flex items-center justify-center gap-2 bg-[#0a2540] hover:bg-[#112d4e] text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg shadow-slate-200 hover:-translate-y-0.5"
                   >
+                    <Search className="w-4 h-4" />
                     Find My KRA PIN
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 ml-1" />
                   </button>
                   <button
                     onClick={() => setShowKRAPopup(true)}
@@ -1022,15 +1040,9 @@ export default function CitizenLinkAfrica() {
                   </div>
                 </div>
 
-                {/* Desktop Services Grid */}
-                <div className="hidden lg:block">
-                  <div className="mb-6 flex items-center gap-4">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">
-                      Our Services
-                    </h3>
-                    <div className="flex-1 h-px bg-slate-200" />
-                  </div>
-
+                {/* Desktop Services Grid with Corner Arrow */}
+                <div className="hidden lg:block relative pr-8">
+                  
                   <div className="relative bg-white rounded-[2rem] shadow-[0_8px_40px_rgb(0,0,0,0.04)] ring-1 ring-slate-200/60 overflow-hidden">
                     <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-80" />
 
@@ -1111,6 +1123,56 @@ export default function CitizenLinkAfrica() {
           </div>
         </div>
       </footer>
+
+      {/* ════════════════ FIXED CORNER ARROW (Spotify Style) ════════════════ */}
+      {!isSupplierDrawerOpen && (
+        <div 
+          onClick={() => setIsSupplierDrawerOpen(true)}
+          className="fixed right-0 top-1/2 -translate-y-1/2 w-6 h-16 bg-white rounded-l-xl shadow-[-4px_0_10px_rgba(0,0,0,0.1)] flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-all z-40 hidden lg:flex border border-slate-200 border-r-0"
+          title="Open Supplier Services"
+        >
+          <ChevronLeft className="w-5 h-5 text-slate-500" />
+        </div>
+      )}
+
+      {/* ════════════════ SUPPLIER DRAWER ════════════════ */}
+      {isSupplierDrawerOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex justify-end" onClick={() => setIsSupplierDrawerOpen(false)}>
+          <div className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col relative" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h2 className="text-lg font-bold text-[#0a2540]">Supplier Compliance</h2>
+              <button onClick={() => setIsSupplierDrawerOpen(false)} className="text-slate-500 hover:text-slate-800 p-1 bg-white rounded-full border border-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {[
+                { title: 'Nil Tax Automation', icon: FileCheck },
+                { title: 'Landlord Tax Management', icon: Home },
+                { title: 'Supplier Verification Compliance', icon: UserCheck },
+                { title: 'Exempted Tax Check', icon: ShieldCheck },
+                { title: 'Business Invoice Track', icon: Receipt },
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setComingSoonTitle(item.title);
+                    setShowComingSoon(true);
+                    setIsSupplierDrawerOpen(false);
+                  }}
+                  className="w-full text-left px-5 py-4 border-b border-slate-100 flex items-center gap-4 hover:bg-slate-50 transition-colors group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[15px] font-semibold text-slate-700 group-hover:text-[#0a2540]">{item.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════ MODALS ════════════════ */}
 
