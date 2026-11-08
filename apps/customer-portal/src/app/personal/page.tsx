@@ -870,46 +870,46 @@ export default function CitizenLinkAfrica() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc]">
       {/* ──────── HEADER ──────── */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 shadow-lg w-full">
-        <div className="w-full bg-amber-500/95 backdrop-blur-sm border-b border-amber-400/30">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <header className="w-full bg-white border-b border-gray-100 shadow-sm sticky top-0 z-50">
+        <div className="w-full bg-blue-900">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-2 py-1 sm:py-1.5">
-              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-900 animate-pulse flex-shrink-0" />
-              <span className="text-[10px] sm:text-xs font-medium text-amber-900 text-center leading-tight">
+              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-200 animate-pulse flex-shrink-0" />
+              <span className="text-[10px] sm:text-xs font-medium text-blue-100 text-center leading-tight">
                 Authorized Ushuru Mashinani Partner: Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
               </span>
             </div>
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 sm:h-20">
             <div className="flex items-center flex-shrink-0">
-              <span className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white whitespace-nowrap">
-                Taxflow <span className="text-yellow-300">Africa</span>
+              <span className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-[#0a2540] whitespace-nowrap">
+                Taxflow <span className="text-blue-600">Africa</span>
               </span>
             </div>
 
-            <div className="relative flex items-center gap-1 sm:gap-2">
+            <div className="relative flex items-center gap-2">
               <button
                 onClick={() => { setIsNotificationOpen(!isNotificationOpen); setHasUnread(false) }}
-                className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
+                className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 aria-label="Notifications"
               >
-                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
                 {hasUnread && (
-                  <span className="absolute top-1 right-1 h-2 w-2 sm:h-2.5 sm:w-2.5 bg-red-500 rounded-full border-2 border-blue-600"></span>
+                  <span className="absolute top-1 right-1 h-2 w-2 sm:h-2.5 sm:w-2.5 bg-red-500 rounded-full border-2 border-white"></span>
                 )}
               </button>
 
               <button
-                className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+                className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="Menu"
               >
-                <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
               </button>
 
               {isNotificationOpen && (
@@ -942,17 +942,17 @@ export default function CitizenLinkAfrica() {
           </div>
 
           {isMobileMenuOpen && (
-            <div className="md:hidden py-3 border-t border-white/10">
-              <p className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider px-2 mb-2">Our Services</p>
+            <div className="md:hidden py-3 border-t border-gray-100">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Our Services</p>
               <div className="grid grid-cols-1 gap-1.5">
                 {serviceCards.map((card, i) => (
                   <button
                     key={i}
                     onClick={() => { card.onClick(); setIsMobileMenuOpen(false) }}
-                    className="w-full text-left px-3 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-3"
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-3"
                   >
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-400' : 'bg-gray-400'}`} />
-                    <span className="text-sm font-medium text-white">{card.title}</span>
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${card.isActive ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                    <span className="text-sm font-medium text-gray-700">{card.title}</span>
                   </button>
                 ))}
               </div>
@@ -961,36 +961,45 @@ export default function CitizenLinkAfrica() {
         </div>
       </header>
 
-      {/* ──────── MAIN CONTENT ──────── */}
-      <main className="flex-1 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start">
+      {/* ──────── MAIN CONTENT (Hero Section) ──────── */}
+      <main className="flex-1 w-full bg-[#0a2540] relative overflow-hidden">
+        {/* Background decorative elements to mimic the dark blue hero */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl"></div>
+          <div className="absolute top-1/2 -left-20 w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl"></div>
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMtOS45NDEgMC0xOCA4LjA1OS0xOCAxOHM4LjA1OSAxOCAxOCAxOCAxOC04LjA1OSAxOC0xOC04LjA1OS0xOC0xOC0xOHptMCAyYy04LjgzNyAwLTE2IDcuMTYzLTE2IDE2czcuMTYzIDE2IDE2IDE2IDE2LTcuMTYzIDE2LTE2LTcuMTYzLTE2LTE2LTE2eiIgZmlsbD0iIzFhMzY1YyIvPjwvZz48L3N2Zz4=')] opacity-20"></div>
+        </div>
 
-              <div className="max-w-2xl mx-auto lg:mx-0">
-                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-[11px] sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6">
-                  <span>Official KRA Ushuru Mashinani Partner</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20 relative z-10">
+          <div className={`transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+
+              {/* Left Column - Text Content */}
+              <div className="max-w-2xl mx-auto lg:mx-0 text-center lg:text-left">
+                <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 text-blue-200 text-[11px] sm:text-sm font-semibold px-4 py-2 rounded-full mb-6">
+                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                  Official KRA Ushuru Mashinani Partner
                 </div>
 
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-[1.15] sm:leading-[1.1] mb-4 sm:mb-6 tracking-tight">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white leading-[1.1] sm:leading-[1.1] mb-6 tracking-tight">
                   KRA Services
                   <br />
                   <span className="relative inline-block">
-                    <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    <span className="bg-gradient-to-r from-blue-300 via-sky-300 to-indigo-300 bg-clip-text text-transparent">
                       Brought Closer to You.
                     </span>
-                    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-blue-600/40 via-indigo-600/40 to-purple-600/40 rounded-full blur-sm" />
+                    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-blue-400/50 via-sky-400/50 to-indigo-400/50 rounded-full blur-sm" />
                   </span>
                 </h1>
 
-                <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-4 sm:mb-5 leading-relaxed">
+                <p className="text-sm sm:text-base lg:text-lg text-blue-100/80 mb-8 leading-relaxed max-w-xl mx-auto lg:mx-0">
                   Fulfilling your tax obligations shouldn't be complicated. Through the{' '}
-                  <span className="font-semibold text-gray-800">Ushuru Mashinani</span> initiative,
+                  <span className="font-semibold text-white">Ushuru Mashinani</span> initiative,
                   Taxflow Africa simplifies KRA processes so you can file returns, get your KRA PIN,
                   and stay compliant from your phone or computer.
                 </p>
 
-                <div className="space-y-2 sm:space-y-2.5 mb-4 sm:mb-6">
+                <div className="space-y-3 mb-8 flex flex-col items-center lg:items-start">
                   {[
                     'Find My KRA PIN',
                     'Filing Nil, Individual & Business Returns',
@@ -998,9 +1007,9 @@ export default function CitizenLinkAfrica() {
                     'iTax Profile Updates (Phone & Email)',
                     'eTIMS Onboarding & Assistance',
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm sm:text-base text-gray-700">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                        <svg className="h-3 w-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div key={i} className="flex items-center gap-3 text-sm sm:text-base text-blue-50/90">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500/30 flex items-center justify-center">
+                        <svg className="h-3 w-3 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
@@ -1010,105 +1019,57 @@ export default function CitizenLinkAfrica() {
                 </div>
               </div>
 
+              {/* Right Column - Services Grid (Adapted for both mobile and desktop) */}
               <div className="w-full">
-                <div className="lg:hidden">
-                  <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                    Select a service to begin:
-                  </p>
-                  <div className="space-y-2">
-                    {serviceCards.map((card, i) => (
-                      <button
-                        key={i}
-                        onClick={card.onClick}
-                        className={`w-full flex items-center gap-3 p-3.5 sm:p-4 rounded-xl border shadow-sm active:scale-[0.98] transition-transform ${
-                          card.isActive
-                            ? 'bg-white border-gray-200 hover:border-sky-300 hover:shadow-md'
-                            : 'bg-gray-50 border-gray-200 opacity-70'
-                        }`}
-                      >
-                        <FileText className={`h-5 w-5 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
-                        <span className={`text-sm font-semibold text-left flex-1 ${card.isActive ? 'text-gray-800' : 'text-gray-500'}`}>
-                          {card.title}
-                        </span>
-                        {card.isActive && card.tag && (
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
-                            card.tag === 'NEW' 
-                              ? 'text-red-700 bg-red-100' 
-                              : 'text-sky-700 bg-sky-100'
-                          }`}>
-                            {card.tag}
-                          </span>
-                        )}
-                        {!card.isActive && (
-                          <span className="text-[9px] font-semibold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                            Soon
-                          </span>
-                        )}
-                        <ChevronRight className={`h-4 w-4 flex-shrink-0 ${card.isActive ? 'text-gray-400' : 'text-gray-300'}`} />
-                      </button>
-                    ))}
-                  </div>
+                <div className="mb-6 text-center lg:text-left">
+                  <h3 className="text-lg sm:text-xl font-bold text-white inline-flex items-center gap-3">
+                    <span className="hidden lg:block w-12 h-px bg-blue-400/50"></span>
+                    Our Services
+                  </h3>
+                  <p className="text-sm text-blue-200/70 mt-1">Select a service to get started</p>
                 </div>
 
-                <div className="hidden lg:block">
-                  <div className="mb-4 text-center">
-                    <h3 className="text-base sm:text-lg font-bold text-gray-700 inline-flex items-center gap-3">
-                      <span className="w-12 h-px bg-blue-300"></span>
-                      Our Services
-                      <span className="w-12 h-px bg-blue-300"></span>
-                    </h3>
-                  </div>
-
-                  <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/60 rounded-3xl shadow-xl shadow-blue-200/40 ring-1 ring-blue-100/80 overflow-hidden">
-                    <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-                    <div className="pointer-events-none absolute -top-24 -right-24 w-56 h-56 rounded-full bg-gradient-to-br from-blue-300/20 to-purple-300/20 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-24 -left-24 w-56 h-56 rounded-full bg-gradient-to-br from-indigo-300/20 to-sky-300/20 blur-3xl" />
-
-                    <div className="relative p-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        {serviceCards.map((card, i) => (
-                          <div
-                            key={i}
-                            className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-80' : ''}`}
-                            onMouseEnter={() => setActiveCard(i)}
-                            onMouseLeave={() => setActiveCard(null)}
-                            onClick={card.onClick}
-                          >
-                            <div className={`relative border rounded-2xl p-4 h-full flex flex-col justify-between overflow-hidden transition-all duration-300 ${
-                              card.isActive
-                                ? `${card.color} hover:shadow-lg hover:-translate-y-0.5`
-                                : 'bg-slate-50/80 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100/80'
-                            }`}>
-                              <div className="relative z-10">
-                                <div className="flex items-start justify-between gap-2 mb-1.5">
-                                  <h3 className={`font-bold text-sm sm:text-base ${card.isActive ? 'text-gray-900' : 'text-slate-500'}`}>
-                                    {card.title}
-                                  </h3>
-                                  {card.isActive && card.tag && (
-                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
-                                      card.tag === 'NEW' 
-                                        ? 'text-red-700 bg-red-100 ring-1 ring-red-200' 
-                                        : 'text-sky-700 bg-sky-100 ring-1 ring-sky-200'
-                                    }`}>
-                                      {card.tag}
-                                    </span>
-                                  )}
-                                  {!card.isActive && (
-                                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                                      Soon
-                                    </span>
-                                  )}
-                                </div>
-                                <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-gray-500' : 'text-slate-400'}`}>
-                                  {card.desc}
-                                </p>
-                              </div>
-                            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {serviceCards.map((card, i) => (
+                    <div
+                      key={i}
+                      className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-70' : ''}`}
+                      onMouseEnter={() => setActiveCard(i)}
+                      onMouseLeave={() => setActiveCard(null)}
+                      onClick={card.onClick}
+                    >
+                      <div className={`relative border rounded-xl p-4 h-full flex flex-col justify-between overflow-hidden transition-all duration-300 ${
+                        card.isActive
+                          ? 'bg-white/10 backdrop-blur-sm border-white/20 hover:bg-white/20 hover:shadow-lg hover:-translate-y-0.5'
+                          : 'bg-white/5 backdrop-blur-sm border-white/10 border-dashed hover:bg-white/10'
+                      }`}>
+                        <div className="relative z-10">
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <h3 className={`font-bold text-sm sm:text-base ${card.isActive ? 'text-white' : 'text-blue-200/70'}`}>
+                              {card.title}
+                            </h3>
+                            {card.isActive && card.tag && (
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                                card.tag === 'NEW' 
+                                  ? 'text-red-100 bg-red-500/80 ring-1 ring-red-400' 
+                                  : 'text-sky-100 bg-sky-500/80 ring-1 ring-sky-400'
+                              }`}>
+                                {card.tag}
+                              </span>
+                            )}
+                            {!card.isActive && (
+                              <span className="text-[9px] font-semibold text-blue-200 bg-white/10 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                                Soon
+                              </span>
+                            )}
                           </div>
-                        ))}
+                          <p className={`text-xs sm:text-sm leading-snug ${card.isActive ? 'text-blue-100/80' : 'text-blue-200/50'}`}>
+                            {card.desc}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1117,33 +1078,33 @@ export default function CitizenLinkAfrica() {
       </main>
 
       {/* ──────── FOOTER ──────── */}
-      <footer className="w-full bg-slate-900 text-slate-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
-            <span className="font-bold text-white">
-              Taxflow <span className="text-yellow-300">Africa</span>
+      <footer className="w-full bg-white border-t border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center text-gray-500">
+            <span className="font-bold text-[#0a2540]">
+              Taxflow <span className="text-blue-600">Africa</span>
             </span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">
+            <span className="text-gray-300">|</span>
+            <span>
               © {new Date().getFullYear()} All rights reserved.
             </span>
-            <span className="text-slate-600">|</span>
-            <Link href="/terms" className="text-slate-300 hover:text-white transition-colors">
+            <span className="text-gray-300">|</span>
+            <Link href="/terms" className="hover:text-gray-900 transition-colors">
               Terms &amp; Conditions
             </Link>
-            <span className="text-slate-600">|</span>
-            <Link href="/privacy" className="text-slate-300 hover:text-white transition-colors">
+            <span className="text-gray-300">|</span>
+            <Link href="/privacy" className="hover:text-gray-900 transition-colors">
               Privacy Policy
             </Link>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">
+            <span className="text-gray-300">|</span>
+            <span>
               Official KRA Ushuru Mashinani Partner.
             </span>
           </div>
         </div>
       </footer>
 
-      {/* ════════════════ MODALS ════════════════ */}
+      {/* ════════════════ MODALS (Unchanged Logic, Updated UI to match new style) ════════════════ */}
 
       {showNearestCyberForm && (
         <ModalOverlay onClose={() => setShowNearestCyberForm(false)} size="large">
@@ -2288,7 +2249,7 @@ function ModalOverlay({ children, onClose, size = 'default' }: {
     'max-w-sm sm:max-w-md'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-4 sm:p-6 md:p-7 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
         <button
           onClick={onClose}
