@@ -103,7 +103,7 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
-  const [agreedToTerms, setAgreedToTerms] = useState(false) // NEW: Mandatory terms state
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
   // Verify KRA PIN
   const [showVerifyForm, setShowVerifyForm] = useState(false)
@@ -680,7 +680,7 @@ export default function CitizenLinkAfrica() {
     setPinError('')
     setPinResult(null)
     setCopied(false)
-    setAgreedToTerms(false) // Reset terms agreement
+    setAgreedToTerms(false)
     setReprintOnlyEmail('')
     setReprintOnlyPaymentNo('')
     setReprintOnlyError('')
@@ -957,22 +957,58 @@ export default function CitizenLinkAfrica() {
                   and stay compliant from anywhere.
                 </p>
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <button
-                    onClick={() => setShowFindPINForm(true)}
-                    className="inline-flex items-center justify-center gap-2 bg-[#0a2540] hover:bg-[#112d4e] text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg shadow-slate-200 hover:-translate-y-0.5"
-                  >
-                    <Search className="w-4 h-4" />
-                    Find My KRA PIN
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </button>
-                  <button
-                    onClick={() => setShowKRAPopup(true)}
-                    className="inline-flex items-center justify-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-[#0a2540] px-8 py-4 rounded-xl font-bold transition-all shadow-sm hover:-translate-y-0.5"
-                  >
-                    Get Started
-                  </button>
+                {/* ════════════ USEFUL LINKS SECTION ════════════ */}
+                <div className="mt-8">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">
+                    Useful Links
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 max-w-lg">
+                    
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">New PIN Registration</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        To get a new PIN, <Link href="#new-pin" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Tax Calculator</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Calculate your taxes, <Link href="#tax-calculator" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">WhatsApp Tax Automation</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Automate via WhatsApp, <Link href="#whatsapp-tax" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Verify eTIMS Invoice</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Check an eTIMS invoice, <Link href="#verify-etims" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Verify Exemption Cert</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Validate a certificate, <Link href="#verify-exemption" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Check My Tax Station</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Find your station, <Link href="#tax-station" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                  </div>
                 </div>
+                {/* ════════════ END USEFUL LINKS SECTION ════════════ */}
               </div>
 
               <div className="w-full">
