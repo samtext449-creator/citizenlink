@@ -83,11 +83,11 @@ export default function TermsPage() {
             <ol className="space-y-2 text-[15px] text-gray-700">
               <li><a href="#service" className="text-blue-700 hover:text-blue-800 hover:underline">1. The Service</a></li>
               <li><a href="#eligibility" className="text-blue-700 hover:text-blue-800 hover:underline">2. Eligibility</a></li>
-              <li><a href="#responsibilities" className="text-blue-700 hover:text-blue-800 hover:underline">3. Your responsibilities</a></li>
+              <li><a href="#responsibilities" className="text-blue-700 hover:text-blue-800 hover:underline">3. Your responsibilities &amp; data consent</a></li>
               <li><a href="#accuracy" className="text-blue-700 hover:text-blue-800 hover:underline">4. Accuracy of information</a></li>
               <li><a href="#payment" className="text-blue-700 hover:text-blue-800 hover:underline">5. Payments and refunds</a></li>
               <li><a href="#ip" className="text-blue-700 hover:text-blue-800 hover:underline">6. Intellectual property</a></li>
-              <li><a href="#thirdparty" className="text-blue-700 hover:text-blue-800 hover:underline">7. Third-party services</a></li>
+              <li><a href="#thirdparty" className="text-blue-700 hover:text-blue-800 hover:underline">7. Third-party services &amp; data protection</a></li>
               <li><a href="#liability" className="text-blue-700 hover:text-blue-800 hover:underline">8. Limitation of liability</a></li>
               <li><a href="#termination" className="text-blue-700 hover:text-blue-800 hover:underline">9. Termination</a></li>
               <li><a href="#changes" className="text-blue-700 hover:text-blue-800 hover:underline">10. Changes to these Terms</a></li>
@@ -130,21 +130,24 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          {/* 3. Your Responsibilities */}
+          {/* 3. Your Responsibilities & Consent */}
           <section id="responsibilities" className="scroll-mt-24 mb-12">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-5">
-              3. Your responsibilities
+              3. Your responsibilities &amp; data consent
             </h2>
             <p className="text-[15px] sm:text-base text-gray-700 leading-7 mb-4">
               When using the Service, you agree to:
             </p>
-            <ul className="list-disc pl-6 space-y-2 text-[15px] sm:text-base text-gray-700 leading-7">
+            <ul className="list-disc pl-6 space-y-2 text-[15px] sm:text-base text-gray-700 leading-7 mb-4">
               <li>Provide only your own personal information, or information you are legally authorized to submit on behalf of another person.</li>
               <li>Not use the Service for fraud, identity theft, or any unlawful activity.</li>
               <li>Not attempt to interfere with, reverse engineer, or disrupt the Service.</li>
               <li>Not resell, sublicense, or commercially exploit the Service without our prior written consent.</li>
               <li>Keep any account credentials (if applicable) confidential and secure.</li>
             </ul>
+            <p className="text-[15px] sm:text-base text-gray-700 leading-7">
+              <span className="font-semibold text-gray-900">Data Consent:</span> By checking the consent box on our service forms (e.g., when finding a KRA PIN), you explicitly authorize Taxflow Africa (Xeco Developers) to submit the provided information to the Kenya Revenue Authority (KRA) and other necessary third parties to facilitate the requested service.
+            </p>
           </section>
 
           {/* 4. Accuracy of Information */}
@@ -181,9 +184,7 @@ export default function TermsPage() {
             <p className="text-[15px] sm:text-base text-gray-700 leading-7 mb-3">
               <span className="font-semibold text-gray-900">Refund policy:</span> Because our services
               involve digital processing and third-party fees, payments are generally non-refundable
-              once a request has been submitted. If a service fails due to a fault on our side, we
-              will re-attempt the service or, where re-attempt is not possible, issue a refund at our
-              discretion.
+              once a request has been submitted. If a service fails due to a fault on our side, or if an M-Pesa payment is successfully deducted but the request fails to initiate due to a network error, we will re-attempt the service or, where re-attempt is not possible, issue a refund at our discretion.
             </p>
             <p className="text-[15px] sm:text-base text-gray-700 leading-7">
               Refund requests should be sent to{' '}
@@ -210,15 +211,18 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 7. Third-Party Services */}
+          {/* 7. Third-Party Services & Data Protection */}
           <section id="thirdparty" className="scroll-mt-24 mb-12">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-5">
-              7. Third-party services
+              7. Third-party services &amp; data protection
             </h2>
             <p className="text-[15px] sm:text-base text-gray-700 leading-7 mb-4">
               The Service relies on integrations with third-party platforms, including the Kenya
               Revenue Authority (KRA), Safaricom M-Pesa, and identity verification providers. Your use
               of those integrations is also subject to the terms and policies of those third parties.
+            </p>
+            <p className="text-[15px] sm:text-base text-gray-700 leading-7 mb-4">
+              We process your personal data in accordance with the <span className="font-semibold">Kenya Data Protection Act, 2019</span>. By using the Service, you consent to the collection, use, and processing of your data as necessary to provide the Service (e.g., verifying your identity with KRA or processing payments via M-Pesa). For more details on how we handle your information, please refer to our Privacy Policy.
             </p>
             <p className="text-[15px] sm:text-base text-gray-700 leading-7">
               We are not responsible for the availability, accuracy, or actions of any third-party
