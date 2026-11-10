@@ -9,7 +9,9 @@ import {
   MessageSquare, 
   Image as ImageIcon, 
   Folder, 
-  Code
+  Code,
+  UserCheck,
+  Receipt
 } from 'lucide-react'
 
 interface PricingModalProps {
@@ -123,8 +125,9 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
                   { icon: MessageSquare, text: '15 Free KRA PIN checks per day' },
                   { icon: ImageIcon, text: '5 Free KRA obligation checks per day' },
                   { icon: Folder, text: 'Basic KRA PIN & status verification' },
+                  { icon: UserCheck, text: 'Link only 1 KRA Account' },
                   { icon: Code, text: 'No account, password, or sign-up needed' },
-                  { icon: Check, text: 'Standard community support' }
+                  { icon: Receipt, text: 'Verify 4 eTIMS receipts per day' }
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <feature.icon className="w-4 h-4 text-[#8e8e8e] flex-shrink-0" strokeWidth={1.5} />
