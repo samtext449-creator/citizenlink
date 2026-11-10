@@ -31,6 +31,9 @@ import {
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
+// 1. IMPORT THE NEW PRICING MODAL
+import PricingModal from '@/components/PricingModal'
+
 // ─── Config ─────────────
 const XECOFLOW_PAY_BASE = process.env.NEXT_PUBLIC_XECOFLOW_PAY_URL || 'https://xecoflow-pay.onrender.com'
 
@@ -79,6 +82,9 @@ export default function CitizenLinkAfrica() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false)
+
+  // 2. ADD STATE FOR PRICING MODAL
+  const [showPricingModal, setShowPricingModal] = useState(false)
 
   // Location
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
@@ -837,7 +843,11 @@ export default function CitizenLinkAfrica() {
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
                 Resources
               </button>
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+              {/* 3. WIRE UP THE PRICING LINK */}
+              <button 
+                onClick={() => setShowPricingModal(true)}
+                className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
+              >
                 Pricing
               </button>
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
@@ -2284,6 +2294,15 @@ export default function CitizenLinkAfrica() {
           </div>
         </ModalOverlay>
       )}
+
+      {/* 4. ADD THE PRICING MODAL AT THE BOTTOM */}
+      <PricingModal 
+        isOpen={showPricingModal} 
+        onClose={() => setShowPricingModal(false)} 
+        onStartFree={() => {
+          setShowFindPINForm(true)
+        }} 
+      />
     </div>
   )
 }
