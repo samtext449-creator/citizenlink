@@ -22,17 +22,33 @@ interface PricingModalProps {
 
 export default function PricingModal({ isOpen, onClose, onStartFree }: PricingModalProps) {
   const [activeTab, setActiveTab] = useState<'monthly' | 'annual'>('monthly')
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false)
+
+  // Handle the exit animation
+  const handleClose = () => {
+    setIsAnimatingOut(true)
+    setTimeout(() => {
+      setIsAnimatingOut(false)
+      onClose()
+    }, 300) // Matches the duration-300
+  }
 
   if (!isOpen) return null
 
   return (
-    // Full screen, solid background to look like a separate page
-    <div className="fixed inset-0 z-[100] flex flex-col bg-white overflow-y-auto">
+    // Changed background to off-white to reduce glare, keeping the in/out animation
+    <div 
+      className={`fixed inset-0 z-[100] flex flex-col bg-[#f9f9f9] overflow-y-auto transition-all duration-300 ease-in-out ${
+        isAnimatingOut 
+          ? 'animate-out fade-out slide-out-to-bottom-4 zoom-out-95 duration-300' 
+          : 'animate-in fade-in slide-in-from-bottom-4 zoom-in-95 duration-500'
+      }`}
+    >
       
       {/* Top Navigation Bar */}
       <div className="w-full flex items-center justify-between px-6 py-5 sm:px-10">
         {/* Logo */}
-        <Link href="/" className="flex items-center flex-shrink-0" onClick={onClose}>
+        <Link href="/" className="flex items-center flex-shrink-0" onClick={(e) => { e.preventDefault(); handleClose(); }}>
           <span className="text-xl font-bold tracking-tight text-[#0a2540]">
             Taxflow<span className="text-blue-600">.</span>
           </span>
@@ -40,8 +56,8 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
 
         {/* Close Button */}
         <button
-          onClick={onClose}
-          className="p-2 text-slate-500 hover:text-slate-900 bg-transparent hover:bg-slate-100 rounded-full transition-all"
+          onClick={handleClose}
+          className="p-2 text-slate-500 hover:text-slate-900 bg-transparent hover:bg-slate-200/50 rounded-full transition-all"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
@@ -53,15 +69,9 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
         
         {/* Header & Tabs */}
         <div className="text-center mb-10 w-full max-w-2xl">
-          <h2 className="text-[28px] sm:text-[32px] font-semibold text-[#0d0d0d] tracking-tight mb-3">
+          <h2 className="text-[28px] sm:text-[32px] font-semibold text-[#0d0d0d] tracking-tight mb-8">
             Upgrade your plan
           </h2>
-          
-          <p className="text-[13px] text-slate-500 mb-8 max-w-lg mx-auto leading-relaxed">
-            Cancel at any time. By subscribing, you agree to the terms for{' '}
-            <Link href="/terms" className="text-blue-600 hover:underline">Taxflow</Link> and offers. See how we{' '}
-            <Link href="/privacy" className="text-blue-600 hover:underline">handles your data</Link>.
-          </p>
           
           {/* Toggle Tabs */}
           <div className="inline-flex items-center p-1 bg-[#f0f1f2] rounded-full">
@@ -69,8 +79,8 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
               onClick={() => setActiveTab('monthly')}
               className={`px-8 py-2 rounded-full text-[13px] font-medium transition-all ${
                 activeTab === 'monthly' 
-                  ? 'bg-[#0b57d0] text-white shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#0d0d0d] shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Monthly
@@ -79,8 +89,8 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
               onClick={() => setActiveTab('annual')}
               className={`px-8 py-2 rounded-full text-[13px] font-medium transition-all ${
                 activeTab === 'annual' 
-                  ? 'bg-[#0b57d0] text-white shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#0d0d0d] shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Annual
@@ -110,8 +120,8 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
             {/* CTA Button */}
             <button 
               onClick={() => {
-                onClose()
-                onStartFree()
+                handleClose()
+                setTimeout(() => onStartFree(), 300) 
               }}
               className="w-full bg-white border border-[#d1d5db] hover:bg-slate-50 text-[#0d0d0d] font-medium py-3.5 rounded-full transition-all mb-8 text-sm"
             >
@@ -145,7 +155,7 @@ export default function PricingModal({ isOpen, onClose, onStartFree }: PricingMo
               </div>
             </div>
 
-            {/* Replaced Footer Note (Free Plan specific) */}
+            {/* Footer Note */}
             <div className="mt-8 pt-4 border-t border-[#e5e5e5] text-center">
               <p className="text-[11px] text-[#8e8e8e] leading-relaxed">
                 The Free tier is maintained to ensure basic tax services remain accessible to all Kenyans under the{' '}
