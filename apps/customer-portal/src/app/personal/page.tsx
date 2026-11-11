@@ -814,10 +814,11 @@ export default function CitizenLinkAfrica() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fafafa] font-sans selection:bg-blue-100 selection:text-blue-900">
-      {/* ──────── HEADER ──────── */}
+{/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 w-full bg-[#fafafa]/80 backdrop-blur-xl pt-3 sm:pt-4">
         <div className="w-full px-2 sm:px-4 lg:px-6 pb-3 sm:pb-4">
-          <div className="bg-white rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
+          {/* The pill container */}
+          <div className="bg-[#f3f4f6] rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
             
             {/* Logo */}
             <Link href="/" className="flex items-center flex-shrink-0">
@@ -827,40 +828,40 @@ export default function CitizenLinkAfrica() {
             </Link>
 
             {/* Center Nav Links (Desktop) */}
-            <nav className="hidden lg:flex items-center space-x-8">
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors flex items-center gap-1">
-                Products <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+            <nav className="hidden lg:flex items-center space-x-7">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
+                Products <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 Intergration
               </button>
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors flex items-center gap-1">
-                Solutions <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
+                Solutions <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 eTIMS
               </button>
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 Resources
               </button>
               <button 
                 onClick={() => setShowPricingModal(true)}
-                className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
+                className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide"
               >
                 Pricing
               </button>
-              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 Contact
               </button>
             </nav>
 
-            {/* Right Action Area (Updated to match screenshot) */}
+            {/* Right Action Area */}
             <div className="flex items-center gap-3 sm:gap-4">
               
               {/* Search Icon */}
               <button
                 onClick={() => setShowCheckStatus(true)}
-                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all"
+                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-200/50 rounded-full transition-all"
                 aria-label="Search"
               >
                 <Search className="h-4 w-4" />
@@ -869,22 +870,22 @@ export default function CitizenLinkAfrica() {
               {/* Login Link */}
               <Link 
                 href="/login" 
-                className="hidden sm:inline-flex text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
+                className="hidden sm:inline-flex text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors"
               >
                 Log in
               </Link>
 
               {/* CTA Button */}
               <Link
-              href="/signup"
-              className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                href="/signup"
+                className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
               >
-              Get Started
+                Get Started
               </Link>
 
               {/* Hamburger Menu (Mobile) */}
               <button
-                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all lg:hidden"
+                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-200/50 rounded-full transition-all lg:hidden"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="Menu"
               >
@@ -893,49 +894,6 @@ export default function CitizenLinkAfrica() {
             </div>
           </div>
         </div>
-
-        {/* Mobile Drawer (Safaricom Style) */}
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
-            <div className="absolute right-0 top-0 h-full w-[85vw] max-w-sm bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-              
-              <div className="p-4 border-b border-slate-100 flex justify-start">
-                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-800 hover:text-slate-600 p-1">
-                   <X className="w-6 h-6" />
-                 </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto">
-                 {[
-                   'My Account',
-                   'M-PESA Global Pay',
-                   'M-PESA Foundation',
-                   'Pamoja Tuungane',
-                   'Safaricom Careers',
-                   'Citizens of the Future',
-                   'Safaricom Foundation',
-                   'Safaricom Golf Tour',
-                   'Safaricom Roaming',
-                   'Safaricom Wholesale',
-                   'Newsroom',
-                   'Safaricom Chapa Dimba'
-                 ].map((item, idx) => (
-                   <button
-                     key={idx}
-                     onClick={() => {
-                       setComingSoonTitle(item);
-                       setShowComingSoon(true);
-                       setIsMobileMenuOpen(false);
-                     }}
-                     className="w-full text-left px-5 py-4 border-b border-slate-100 text-green-600 font-medium text-sm hover:bg-slate-50 transition-colors"
-                   >
-                     {item}
-                   </button>
-                 ))}
-              </div>
-            </div>
-          </div>
-        )}
       </header>
 
       {/* ──────── MAIN CONTENT ──────── */}
