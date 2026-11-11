@@ -817,7 +817,7 @@ export default function CitizenLinkAfrica() {
 {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 w-full bg-[#fafafa]/80 backdrop-blur-xl pt-3 sm:pt-4">
         <div className="w-full px-2 sm:px-4 lg:px-6 pb-3 sm:pb-4">
-          {/* The pill container is back, but with the grey background */}
+          {/* The pill container */}
           <div className="bg-[#f3f4f6] rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
             
             {/* Logo */}
@@ -829,28 +829,28 @@ export default function CitizenLinkAfrica() {
 
             {/* Center Nav Links (Desktop) */}
             <nav className="hidden lg:flex items-center space-x-7">
-              <button className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
                 Products <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
-              <button className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 Intergration
               </button>
-              <button className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
                 Solutions <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
-              <button className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 eTIMS
               </button>
-              <button className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 Resources
               </button>
               <button 
                 onClick={() => setShowPricingModal(true)}
-                className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide"
+                className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide"
               >
                 Pricing
               </button>
-              <button className="text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
+              <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors tracking-wide">
                 Contact
               </button>
             </nav>
@@ -870,7 +870,7 @@ export default function CitizenLinkAfrica() {
               {/* Login Link */}
               <Link 
                 href="/login" 
-                className="hidden sm:inline-flex text-[15px] font-bold text-slate-700 hover:text-[#0a2540] transition-colors"
+                className="hidden sm:inline-flex text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors"
               >
                 Log in
               </Link>
