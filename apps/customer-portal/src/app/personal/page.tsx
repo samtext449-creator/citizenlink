@@ -817,7 +817,7 @@ export default function CitizenLinkAfrica() {
       {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 w-full bg-[#fafafa]/80 backdrop-blur-xl pt-3 sm:pt-4">
         <div className="w-full px-2 sm:px-4 lg:px-6 pb-3 sm:pb-4">
-          <div className="bg-white rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+          <div className="bg-white rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
             
             {/* Logo */}
             <Link href="/" className="flex items-center flex-shrink-0">
@@ -843,7 +843,6 @@ export default function CitizenLinkAfrica() {
               <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
                 Resources
               </button>
-              {/* 3. WIRE UP THE PRICING LINK */}
               <button 
                 onClick={() => setShowPricingModal(true)}
                 className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
@@ -855,24 +854,9 @@ export default function CitizenLinkAfrica() {
               </button>
             </nav>
 
-            {/* Right Action Area */}
+            {/* Right Action Area (Updated to match screenshot) */}
             <div className="flex items-center gap-3 sm:gap-4">
               
-              {/* CTA Button */}
-              <button
-                onClick={() => setShowKRAPopup(true)}
-                className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
-              >
-                Get Started
-              </button>
-
-              {/* Language Toggle (RESTORED) */}
-              <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                <span className="text-[#0a2540] font-bold cursor-pointer transition-colors">SW</span>
-                <span className="text-slate-300">|</span>
-                <span className="hover:text-[#0a2540] cursor-pointer transition-colors">EN</span>
-              </div>
-
               {/* Search Icon */}
               <button
                 onClick={() => setShowCheckStatus(true)}
@@ -882,9 +866,25 @@ export default function CitizenLinkAfrica() {
                 <Search className="h-4 w-4" />
               </button>
 
-              {/* Hamburger Menu (RESTORED) */}
+              {/* Login Link */}
+              <Link 
+                href="/login" 
+                className="hidden sm:inline-flex text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
+              >
+                Log in
+              </Link>
+
+              {/* CTA Button */}
+              <Link
+              href="/signup"
+              className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+              >
+              Get Started
+              </Link>
+
+              {/* Hamburger Menu (Mobile) */}
               <button
-                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all"
+                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all lg:hidden"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="Menu"
               >

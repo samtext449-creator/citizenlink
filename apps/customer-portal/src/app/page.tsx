@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { Turnstile } from '@marsidev/react-turnstile'
 import {
   ArrowRight,
   ChevronRight,
@@ -16,29 +16,23 @@ import {
   Timer,
   Menu,
   AlertCircle,
+  Clock as ClockIcon,
   MapPin,
   Navigation,
   ExternalLink,
   Smartphone,
-  Zap,
-  PlayCircle,
-  Shield,
   ShieldCheck,
-  FileSearch,
-  Workflow as WorkflowIcon,
-  Database,
-  Code,
-  Link2,
-  Network,
-  Activity,
-  Send,
-  Save,
-  Check,
-  Settings,
-  LayoutGrid,
-  type LucideIcon,
+  ChevronLeft,
+  FileCheck,
+  Home,
+  UserCheck,
+  Receipt,
+  ChevronDown
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
+
+// 1. IMPORT THE NEW PRICING MODAL
+import PricingModal from '@/components/PricingModal'
 
 // ─── Config ─────────────
 const XECOFLOW_PAY_BASE = process.env.NEXT_PUBLIC_XECOFLOW_PAY_URL || 'https://xecoflow-pay.onrender.com'
@@ -51,7 +45,6 @@ const TAXPAYER_TYPES = [
 ]
 
 const REPRINT_FEE = 25
-
 const REPRINT_WINDOW = { startHour: 8, startMin: 0, endHour: 18, endMin: 30 }
 
 function isReprintWindowOpen(): boolean {
@@ -61,9 +54,6 @@ function isReprintWindowOpen(): boolean {
   const endMinutes = REPRINT_WINDOW.endHour * 60 + REPRINT_WINDOW.endMin
   return minutesNow >= startMinutes && minutesNow <= endMinutes
 }
-
-const CANVAS_W = 760
-const CANVAS_H = 610
 
 interface PinResult {
   kraPin: string
@@ -88,9 +78,13 @@ interface Obligation {
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
 
 export default function CitizenLinkAfrica() {
-   const router = useRouter()
+  const [activeCard, setActiveCard] = useState<number | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false)
+
+  // 2. ADD STATE FOR PRICING MODAL
+  const [showPricingModal, setShowPricingModal] = useState(false)
 
   // Location
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
@@ -115,6 +109,7 @@ export default function CitizenLinkAfrica() {
   const [pinResult, setPinResult] = useState<PinResult | null>(null)
   const [pinError, setPinError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
   // Verify KRA PIN
   const [showVerifyForm, setShowVerifyForm] = useState(false)
@@ -123,17 +118,28 @@ export default function CitizenLinkAfrica() {
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
   const [verifyError, setVerifyError] = useState('')
 
-  // ── Check Obligations (NEW) ──
+  // Check Obligations
   const [showObligationsForm, setShowObligationsForm] = useState(false)
   const [obligationsPin, setObligationsPin] = useState('')
   const [isFetchingObligations, setIsFetchingObligations] = useState(false)
   const [obligationsResult, setObligationsResult] = useState<Obligation[] | null>(null)
   const [obligationsError, setObligationsError] = useState('')
 
-  // Opt-in (compact)
-  const [optIn, setOptIn] = useState(false)
-  const [subEmail, setSubEmail] = useState('')
-  const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  // ── Turnstile State & Refs ──
+  const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
+  const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string | null>(null)
+  const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
+  
+  const pinTurnstileTokenRef = useRef<string | null>(null)
+  const verifyTurnstileTokenRef = useRef<string | null>(null)
+  const obligationsTurnstileTokenRef = useRef<string | null>(null)
+  
+  const pinTurnstileRef = useRef<any>(null)
+  const verifyTurnstileRef = useRef<any>(null)
+  const obligationsTurnstileRef = useRef<any>(null)
+
+  // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
+  const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
 
   // ── Reprint Form ──
   const [showReprintForm, setShowReprintForm] = useState(false)
@@ -142,6 +148,11 @@ export default function CitizenLinkAfrica() {
   const [reprintEmail, setReprintEmail] = useState('')
   const [reprintPaymentNo, setReprintPaymentNo] = useState('')
   const [reprintError, setReprintError] = useState('')
+
+  // ── Reprint-only form (KRA PIN mode) ──
+  const [reprintOnlyEmail, setReprintOnlyEmail] = useState('')
+  const [reprintOnlyPaymentNo, setReprintOnlyPaymentNo] = useState('')
+  const [reprintOnlyError, setReprintOnlyError] = useState('')
 
   // ── Reprint Flow State Machine ──
   const [reprintFlow, setReprintFlow] = useState<ReprintFlowState>('idle')
@@ -170,6 +181,14 @@ export default function CitizenLinkAfrica() {
 
   // Forms
   const [paymentData, setPaymentData] = useState({ phoneNumber: '', amount: REPRINT_FEE })
+
+  // Cleanup on unmount
+  useEffect(
+    () => () => {
+      if (reprintPollRef.current) clearInterval(reprintPollRef.current)
+    },
+    []
+  )
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -225,16 +244,7 @@ export default function CitizenLinkAfrica() {
       } catch (e) { console.error('Error restoring completed state:', e) }
     }
     setIsLoaded(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Cleanup on unmount
-  useEffect(
-    () => () => {
-      if (reprintPollRef.current) clearInterval(reprintPollRef.current)
-    },
-    []
-  )
 
   useEffect(() => {
     if (trackingNumber) localStorage.setItem('citizenlink_last_reference', trackingNumber)
@@ -273,7 +283,6 @@ export default function CitizenLinkAfrica() {
       }, 1000)
     }
     return () => { if (interval) clearInterval(interval) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCounting, countdown, trackingNumber])
 
   const handleFindNearestCyber = () => {
@@ -298,28 +307,19 @@ export default function CitizenLinkAfrica() {
     )
   }
 
-  const fireSubscribe = (identifier: string, fullName: string) => {
-    if (!optIn || !subEmail.trim()) return
-    setSubscribeStatus('saving')
-
-    console.log('[XecoNotify MOCK] subscribe payload:', {
-      full_name: fullName,
-      identifier,
-      email: subEmail.trim(),
-      source_app: 'taxflow_africa',
-      opt_in_marketing: true,
-      channels: ['email'],
-    })
-
-    setTimeout(() => setSubscribeStatus('saved'), 400)
-  }
-
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!pinId.trim()) return
 
-    if (optIn && !subEmail.trim()) {
-      setPinError('Please enter your email to receive updates, or uncheck the box.')
+    if (!agreedToTerms) {
+      setPinError('You must agree to the Terms and Conditions to proceed.')
+      return
+    }
+
+    const token = pinTurnstileTokenRef.current
+
+    if (!token) {
+      setPinError('Please complete the security check.')
       return
     }
 
@@ -327,13 +327,16 @@ export default function CitizenLinkAfrica() {
     setShowPinResult(false)
     setPinError('')
     setPinResult(null)
-    setSubscribeStatus('idle')
 
     try {
-      const res = await fetch(`${XECOFLOW_PAY_BASE}/api/kratax/pin/fetch`, {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taxpayerType, taxpayerId: pinId.trim() }),
+        body: JSON.stringify({ 
+          taxpayerType, 
+          taxpayerId: pinId.trim(),
+          turnstileToken: token
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.success) {
@@ -348,22 +351,29 @@ export default function CitizenLinkAfrica() {
       }
       setPinResult(result)
       setShowPinResult(true)
-
-      fireSubscribe(result.kraPin, result.taxpayerName)
     } catch (err) {
       console.error('[KRA PIN] fetch error', err)
       setPinError('Network error. Please check your connection and try again.')
     } finally {
       setIsLoadingPin(false)
+      pinTurnstileTokenRef.current = null
+      pinTurnstileRef.current?.reset()
+      setPinTurnstileToken(null)
     }
   }
 
-  // ── Verify KRA PIN ──
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanPin = verifyPin.trim().toUpperCase()
     if (!cleanPin || cleanPin.length < 10) {
       setVerifyError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    const token = verifyTurnstileTokenRef.current
+
+    if (!token) {
+      setVerifyError('Please complete the security check.')
       return
     }
 
@@ -375,7 +385,10 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kraPin: cleanPin }),
+        body: JSON.stringify({ 
+          kraPin: cleanPin,
+          turnstileToken: token
+        }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -396,6 +409,9 @@ export default function CitizenLinkAfrica() {
       setVerifyError('Network error. Please check your connection and try again.')
     } finally {
       setIsVerifying(false)
+      verifyTurnstileTokenRef.current = null
+      verifyTurnstileRef.current?.reset()
+      setVerifyTurnstileToken(null)
     }
   }
 
@@ -404,14 +420,22 @@ export default function CitizenLinkAfrica() {
     setVerifyResult(null)
     setVerifyError('')
     setIsVerifying(false)
+    setVerifyTurnstileToken(null)
+    verifyTurnstileTokenRef.current = null
   }
 
-  // ── Check Obligations (NEW) ──
   const handleObligationsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanPin = obligationsPin.trim().toUpperCase()
     if (!cleanPin || cleanPin.length < 10) {
       setObligationsError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    const token = obligationsTurnstileTokenRef.current
+
+    if (!token) {
+      setObligationsError('Please complete the security check.')
       return
     }
 
@@ -423,7 +447,10 @@ export default function CitizenLinkAfrica() {
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kraPin: cleanPin }),
+        body: JSON.stringify({ 
+          kraPin: cleanPin,
+          turnstileToken: token
+        }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -439,6 +466,9 @@ export default function CitizenLinkAfrica() {
       setObligationsError('Network error. Please check your connection and try again.')
     } finally {
       setIsFetchingObligations(false)
+      obligationsTurnstileTokenRef.current = null
+      obligationsTurnstileRef.current?.reset()
+      setObligationsTurnstileToken(null)
     }
   }
 
@@ -447,6 +477,59 @@ export default function CitizenLinkAfrica() {
     setObligationsResult(null)
     setObligationsError('')
     setIsFetchingObligations(false)
+    setObligationsTurnstileToken(null)
+    obligationsTurnstileTokenRef.current = null
+  }
+
+  const handlePinModeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setReprintOnlyError('')
+
+    const cleanPin = pinId.trim().toUpperCase()
+    if (!cleanPin || cleanPin.length < 10) {
+      setReprintOnlyError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+    if (!reprintOnlyEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reprintOnlyEmail)) {
+      setReprintOnlyError('Please enter a valid email address.')
+      return
+    }
+    const cleanPhone = reprintOnlyPaymentNo.replace(/\D/g, '')
+    if (cleanPhone.length < 9) {
+      setReprintOnlyError('Please enter a valid M-Pesa payment number.')
+      return
+    }
+
+    setReprintFlow('processing')
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/reprint/initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: 'KRA PIN Customer',
+          idOrPin: cleanPin,
+          email: reprintOnlyEmail.trim(),
+          paymentPhone: reprintOnlyPaymentNo.trim(),
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data?.success || !data?.data?.request_id) {
+        setReprintFlow('error')
+        setReprintOnlyError(data?.error?.message || 'Could not process the reprint request.')
+        return
+      }
+
+      const requestId = data.data.request_id
+      setReprintFlow('pending')
+      startReprintPolling(requestId)
+    } catch (err) {
+      console.error('[REPRINT-PIN] init error', err)
+      setReprintFlow('error')
+      setReprintOnlyError('Something went wrong. Please try again.')
+    }
   }
 
   const handleCopyPin = () => {
@@ -456,7 +539,6 @@ export default function CitizenLinkAfrica() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ── Reprint Form ──
   const handleOpenReprintForm = () => {
     if (pinResult) {
       const parts = (pinResult.taxpayerName || '').trim().split(/\s+/)
@@ -478,7 +560,6 @@ export default function CitizenLinkAfrica() {
     setShowReprintForm(true)
   }
 
-  // ── Reprint Poller ──
   const startReprintPolling = (requestId: string) => {
     setReprintPollCount(0)
     if (reprintPollRef.current) clearInterval(reprintPollRef.current)
@@ -493,6 +574,7 @@ export default function CitizenLinkAfrica() {
           reprintPollRef.current = null
           setReprintFlow('error')
           setReprintError('Payment is taking longer than expected. Check your M-Pesa messages.')
+          setReprintOnlyError('Payment is taking longer than expected. Check your M-Pesa messages.')
         }
         return prev + 1
       })
@@ -512,7 +594,7 @@ export default function CitizenLinkAfrica() {
           setReprintSuccess({
             amount: data.data.amount || REPRINT_FEE,
             receipt: data.data.mpesa_receipt || null,
-            email: reprintEmail,
+            email: lookupMode === 'pin' ? reprintOnlyEmail : reprintEmail,
           })
           setReprintFlow('success')
           setShowReprintForm(false)
@@ -522,7 +604,9 @@ export default function CitizenLinkAfrica() {
             reprintPollRef.current = null
           }
           setReprintFlow('error')
-          setReprintError(data.data.result_desc || 'Payment failed. Please try again.')
+          const failMsg = data.data.result_desc || 'Payment failed. Please try again.'
+          setReprintError(failMsg)
+          setReprintOnlyError(failMsg)
         }
       } catch {
         // transient network error — keep polling
@@ -530,7 +614,6 @@ export default function CitizenLinkAfrica() {
     }, POLL_INTERVAL_MS)
   }
 
-  // ── Reprint Submit ──
   const handleReprintSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setReprintError('')
@@ -603,9 +686,14 @@ export default function CitizenLinkAfrica() {
     setPinError('')
     setPinResult(null)
     setCopied(false)
-    setOptIn(false)
-    setSubEmail('')
-    setSubscribeStatus('idle')
+    setAgreedToTerms(false)
+    setReprintOnlyEmail('')
+    setReprintOnlyPaymentNo('')
+    setReprintOnlyError('')
+    setReprintFlow('idle')
+    setLookupMode('id')
+    setPinTurnstileToken(null)
+    pinTurnstileTokenRef.current = null
     resetReprintForm()
   }
 
@@ -619,44 +707,18 @@ export default function CitizenLinkAfrica() {
     }).join(' ')
   }
 
-  // 👇 FREE TOOLS with Check Obligations ACTIVE
-const freeTools = [
-  {
-    title: 'Find My KRA PIN',
-    tag: 'Free',
-    icon: Search,
-    isActive: true,
-    onClick: () => router.push('/personal?open=find-pin'),
-  },
-  {
-    title: 'Verify KRA PIN',
-    tag: 'NEW',
-    icon: ShieldCheck,
-    isActive: true,
-    onClick: () => router.push('/personal?open=verify-pin'),
-  },
-  {
-    title: 'Check My Obligations',
-    tag: 'NEW',
-    icon: FileText,
-    isActive: true,
-    onClick: () => router.push('/personal?open=obligations'),
-  },
-  {
-    title: 'Tax Compliance Certificate',
-    tag: 'Soon',
-    icon: FileSearch,
-    isActive: false,
-    onClick: () => router.push('/personal?open=coming-soon'),
-  },
-]
-
-  const topNav = ['Workflows', 'Developers', 'Community', 'Resources']
-
-  const scrollToTools = () => {
-    const el = document.getElementById('free-tools')
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
+  const serviceCards = [
+    { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', hover: 'hover:border-sky-400 hover:shadow-sky-100', onClick: () => setShowFindPINForm(true), isActive: true },
+    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', hover: 'hover:border-violet-400 hover:shadow-violet-100', onClick: () => setShowVerifyForm(true), isActive: true },
+    { title: 'Check My Obligations', desc: 'View all your active tax obligations', tag: 'NEW', color: 'bg-emerald-50 border-emerald-200', hover: 'hover:border-emerald-400 hover:shadow-emerald-100', onClick: () => setShowObligationsForm(true), isActive: true },
+    { title: 'P9 / Employment Returns', desc: 'Annual P9/employment income filing', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Rental Tax Returns', desc: 'Filing for rental income properties', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Rental Tax Returns'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Verify Supplier', desc: 'Confirm supplier tax compliance status', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Verify Supplier'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Check My Tax Compliance', desc: 'View your overall tax compliance', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Check My Tax Compliance'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Nil Tax Automation', desc: 'Automate your nil tax returns seamlessly', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Nil Tax Automation'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Landlord Tax Management', desc: 'Manage and file your rental income tax', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Landlord Tax Management'); setShowComingSoon(true) }, isActive: false },
+  ]
 
   const handlePaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -751,295 +813,404 @@ const freeTools = [
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      <header className="sticky top-0 z-50 w-full">
-        <div className="w-full bg-[#FBBF24]">
-          <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-center gap-2 py-2.5">
-              <Shield className="h-4 w-4 text-[#3b2a05] fill-[#3b2a05]/20 flex-shrink-0" />
-              <span className="text-[10px] sm:text-[13px] text-[#3b2a05] text-center leading-tight">
-                <span className="font-bold">Authorized Ushuru Mashinani Partner:</span> Taxflow Africa is operated by Xeco Developers under Ushuru Mashinani.
+    <div className="min-h-screen flex flex-col bg-[#fafafa] font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* ──────── HEADER ──────── */}
+      <header className="sticky top-0 z-50 w-full bg-[#fafafa]/80 backdrop-blur-xl pt-3 sm:pt-4">
+        <div className="w-full px-2 sm:px-4 lg:px-6 pb-3 sm:pb-4">
+          <div className="bg-white rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
+            
+            {/* Logo */}
+            <Link href="/" className="flex items-center flex-shrink-0">
+              <span className="text-2xl font-extrabold tracking-tight text-[#0a2540]">
+                Taxflow<span className="text-blue-600">.</span>
+              </span>
+            </Link>
+
+            {/* Center Nav Links (Desktop) */}
+            <nav className="hidden lg:flex items-center space-x-8">
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors flex items-center gap-1">
+                Products <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+                Intergration
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors flex items-center gap-1">
+                Solutions <ChevronRight className="w-4 h-4 rotate-90 text-slate-400" />
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+                eTIMS
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+                Resources
+              </button>
+              <button 
+                onClick={() => setShowPricingModal(true)}
+                className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
+              >
+                Pricing
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors">
+                Contact
+              </button>
+            </nav>
+
+            {/* Right Action Area (Updated to match screenshot) */}
+            <div className="flex items-center gap-3 sm:gap-4">
+              
+              {/* Search Icon */}
+              <button
+                onClick={() => setShowCheckStatus(true)}
+                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all"
+                aria-label="Search"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+
+              {/* Login Link */}
+              <Link 
+                href="/login" 
+                className="hidden sm:inline-flex text-sm font-medium text-slate-600 hover:text-[#0a2540] transition-colors"
+              >
+                Log in
+              </Link>
+
+              {/* CTA Button */}
+              <Link
+              href="/signup"
+              className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+              >
+              Get Started
+              </Link>
+
+              {/* Hamburger Menu (Mobile) */}
+              <button
+                className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-100 rounded-full transition-all lg:hidden"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label="Menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Drawer (Safaricom Style) */}
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <div className="absolute right-0 top-0 h-full w-[85vw] max-w-sm bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+              
+              <div className="p-4 border-b border-slate-100 flex justify-start">
+                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-800 hover:text-slate-600 p-1">
+                   <X className="w-6 h-6" />
+                 </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto">
+                 {[
+                   'My Account',
+                   'M-PESA Global Pay',
+                   'M-PESA Foundation',
+                   'Pamoja Tuungane',
+                   'Safaricom Careers',
+                   'Citizens of the Future',
+                   'Safaricom Foundation',
+                   'Safaricom Golf Tour',
+                   'Safaricom Roaming',
+                   'Safaricom Wholesale',
+                   'Newsroom',
+                   'Safaricom Chapa Dimba'
+                 ].map((item, idx) => (
+                   <button
+                     key={idx}
+                     onClick={() => {
+                       setComingSoonTitle(item);
+                       setShowComingSoon(true);
+                       setIsMobileMenuOpen(false);
+                     }}
+                     className="w-full text-left px-5 py-4 border-b border-slate-100 text-green-600 font-medium text-sm hover:bg-slate-50 transition-colors"
+                   >
+                     {item}
+                   </button>
+                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* ──────── MAIN CONTENT ──────── */}
+      <main className="flex-1 w-full relative">
+        {/* Abstract background blobs for premium feel */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-blue-100/40 blur-[100px] rounded-full pointer-events-none -z-10" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 sm:pt-12 sm:pb-20">
+          <div className={`transition-all duration-1000 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start">
+
+              <div className="max-w-2xl mx-auto lg:mx-0">
+                <div className="inline-flex items-center gap-2 bg-white text-blue-700 text-[11px] sm:text-xs font-bold px-3 py-1.5 rounded-full mb-6 shadow-sm ring-1 ring-slate-200/60 uppercase tracking-wide">
+                  <span>Official KRA Ushuru Mashinani Partner</span>
+                </div>
+
+                <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold text-[#0a2540] leading-[1.1] mb-6 tracking-tight">
+                  From Tax Complexity
+                  <br />
+                  <span className="text-blue-600">
+                    to Simplicity.
+                  </span>
+                </h1>
+
+                <p className="text-base sm:text-lg text-slate-600 mb-8 leading-relaxed max-w-lg">
+                  Fulfilling your tax obligations shouldn't be complicated. Through the{' '}
+                  <span className="font-semibold text-slate-800">Ushuru Mashinani</span> initiative,
+                  Taxflow Africa simplifies KRA processes so you can file returns, get your KRA PIN,
+                  and stay compliant from anywhere.
+                </p>
+
+                {/* ════════════ USEFUL LINKS SECTION ════════════ */}
+                <div className="mt-8">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">
+                    Useful Links
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 max-w-lg">
+                    
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">New PIN Registration</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        To get a new PIN, <Link href="#new-pin" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Tax Calculator</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Calculate your taxes, <Link href="#tax-calculator" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">WhatsApp Tax Automation</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Automate via WhatsApp, <Link href="#whatsapp-tax" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Verify eTIMS Invoice</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Check an eTIMS invoice, <Link href="#verify-etims" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Verify Exemption Cert</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Validate a certificate, <Link href="#verify-exemption" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-[#0a2540]">Check My Tax Station</h3>
+                      <p className="text-[13px] text-slate-600 mt-1">
+                        Find your station, <Link href="#tax-station" className="text-blue-600 hover:underline">Click Here</Link>
+                      </p>
+                    </div>
+
+                  </div>
+                </div>
+                {/* ════════════ END USEFUL LINKS SECTION ════════════ */}
+              </div>
+
+              <div className="w-full">
+                {/* Mobile Services List */}
+                <div className="lg:hidden">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">
+                    Select a service to begin:
+                  </p>
+                  <div className="space-y-3">
+                    {serviceCards.map((card, i) => (
+                      <button
+                        key={i}
+                        onClick={card.onClick}
+                        className={`w-full flex items-center gap-4 p-4 rounded-2xl border shadow-sm active:scale-[0.98] transition-all ${
+                          card.isActive
+                            ? `${card.color} border-slate-200`
+                            : 'bg-slate-50 border-slate-200/60 opacity-80'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${card.isActive ? 'bg-white shadow-sm' : 'bg-slate-200'}`}>
+                          <FileText className={`h-4 w-4 ${card.isActive ? 'text-blue-600' : 'text-slate-500'}`} />
+                        </div>
+                        <div className="text-left flex-1">
+                          <span className={`block text-sm font-bold ${card.isActive ? 'text-[#0a2540]' : 'text-slate-500'}`}>
+                            {card.title}
+                          </span>
+                          <span className="block text-xs text-slate-500 mt-0.5">{card.desc}</span>
+                        </div>
+                        {card.isActive && card.tag && (
+                          <span className={`text-[9px] font-bold px-2 py-1 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                            card.tag === 'NEW' 
+                              ? 'text-red-700 bg-red-100' 
+                              : 'text-sky-700 bg-sky-100'
+                          }`}>
+                            {card.tag}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Desktop Services Grid with Corner Arrow */}
+                <div className="hidden lg:block relative pr-8">
+                  
+                  <div className="relative bg-white rounded-[2rem] shadow-[0_8px_40px_rgb(0,0,0,0.04)] ring-1 ring-slate-200/60 overflow-hidden">
+                    <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-80" />
+
+                    <div className="p-5 sm:p-6">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                        {serviceCards.map((card, i) => (
+                          <div
+                            key={i}
+                            className={`relative group/card cursor-pointer transition-all duration-300 ${!card.isActive ? 'opacity-90' : ''}`}
+                            onClick={card.onClick}
+                          >
+                            <div className={`relative border rounded-xl p-4 flex flex-col transition-all duration-300 ${
+                              card.isActive
+                                ? `${card.color} ${card.hover} hover:shadow-md hover:-translate-y-0.5`
+                                : 'bg-slate-100/50 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100'
+                            }`}>
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <h3 className={`font-bold text-sm ${card.isActive ? 'text-[#0a2540]' : 'text-slate-600'}`}>
+                                  {card.title}
+                                </h3>
+                                {card.isActive && card.tag && (
+                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase tracking-wide flex-shrink-0 ${
+                                    card.tag === 'NEW' 
+                                      ? 'text-red-700 bg-red-100 ring-1 ring-red-200/50' 
+                                      : 'text-sky-700 bg-sky-100 ring-1 ring-sky-200/50'
+                                  }`}>
+                                    {card.tag}
+                                  </span>
+                                )}
+                                {!card.isActive && (
+                                  <span className="text-[8px] font-bold text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 uppercase tracking-wide">
+                                    Soon
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-xs leading-snug ${card.isActive ? 'text-slate-600' : 'text-slate-500'}`}>
+                                {card.desc}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* ──────── FOOTER ──────── */}
+      <footer className="w-full bg-[#0a2540] text-slate-300 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white tracking-tight text-sm">
+                Taxflow<span className="text-blue-400">.</span>
+              </span>
+              <span className="text-slate-500">|</span>
+              <span className="text-slate-400">
+                © {new Date().getFullYear()} Taxflow Africa. All rights reserved.
+              </span>
+            </div>
+            
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <Link href="/terms" className="hover:text-white transition-colors">
+                Terms &amp; Conditions
+              </Link>
+              <Link href="/privacy" className="hover:text-white transition-colors">
+                Privacy Policy
+              </Link>
+              <span className="text-slate-500">|</span>
+              <span className="text-blue-400 font-medium">
+                Official KRA Ushuru Mashinani Partner
               </span>
             </div>
           </div>
         </div>
-
-        <div className="w-full bg-gradient-to-r from-[#0b1a73] via-[#1a2fb0] to-[#3548e6] shadow-lg">
-          <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
-              <div className="flex items-center gap-5 flex-shrink-0">
-                <div className="flex items-center gap-3">
-                  <LogoMark className="w-9 h-7 sm:w-11 sm:h-8" gradientId="logo-nav" />
-                  <span className="text-2xl sm:text-[34px] font-extrabold tracking-tight text-white whitespace-nowrap leading-none">
-                    Taxflow <span className="text-[#3fa9ff]">Africa</span>
-                  </span>
-                </div>
-
-                <div className="hidden md:inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5">
-                  <button
-                    type="button"
-                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5] shadow-sm"
-                    aria-current="true"
-                  >
-                    Business Solution
-                  </button>
-                  <Link
-                    href="/personal"
-                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white/75 hover:text-white transition-colors"
-                  >
-                    Personal
-                  </Link>
-                </div>
-              </div>
-
-              <nav className="hidden lg:flex items-center gap-8">
-                {topNav.map((label) => (
-                  <button
-                    key={label}
-                    className="text-[15px] font-medium text-white/95 hover:text-white transition-colors"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <button
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  className="hidden sm:inline-flex items-center justify-center px-6 h-[43px] text-base font-semibold text-white border border-white/70 rounded-full cursor-not-allowed"
-                >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  className="hidden sm:inline-flex items-center justify-center px-6 h-[43px] text-base font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5] rounded-full shadow-lg shadow-blue-900/30 cursor-not-allowed"
-                >
-                  Get started
-                </button>
-
-                <button
-                  className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  aria-label="Menu"
-                >
-                  <Menu className="h-5 w-5 text-white" />
-                </button>
-              </div>
-            </div>
-
-            {isMobileMenuOpen && (
-              <div className="lg:hidden py-3 border-t border-white/10">
-                <div className="mb-3 inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5">
-                  <button
-                    type="button"
-                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5]"
-                    aria-current="true"
-                  >
-                    Personal
-                  </button>
-                  <Link
-                    href="/business"
-                    className="inline-flex items-center px-4 h-8 rounded-full text-[13px] font-semibold text-white/75"
-                  >
-                    Business
-                  </Link>
-                </div>
-
-                <nav className="grid grid-cols-1 gap-1">
-                  {topNav.map((label) => (
-                    <button
-                      key={label}
-                      className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-white hover:bg-white/10 transition-colors"
-                    >
-                      {label}
-                    </button>
-                  ))}
-                  <div className="pt-2 mt-2 border-t border-white/10 flex gap-2">
-                    <button className="flex-1 px-3 py-2 rounded-full text-sm font-semibold text-white border border-white/70">
-                      Sign in
-                    </button>
-                    <button
-                      onClick={() => { setIsMobileMenuOpen(false); scrollToTools() }}
-                      className="flex-1 px-3 py-2 rounded-full text-sm font-semibold text-white bg-gradient-to-r from-[#2f5bf0] to-[#4a63f5]"
-                    >
-                      Get started
-                    </button>
-                  </div>
-                </nav>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 w-full bg-white">
-        <section className="relative overflow-hidden bg-gradient-to-b from-[#f3f6ff] via-[#f7f9ff] to-white">
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute -bottom-40 -left-44 w-[520px] h-[520px] rounded-full border border-blue-200/60" />
-            <div className="absolute -bottom-56 -left-56 w-[680px] h-[680px] rounded-full border border-blue-100/70" />
-            <div className="absolute -bottom-40 -right-32 w-[420px] h-[420px] rounded-full bg-gradient-to-tr from-indigo-100/60 to-transparent" />
-          </div>
-
-          <div className="relative max-w-[1550px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 lg:pt-16 pb-10 sm:pb-14">
-            <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-12 items-center transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-
-              <div>
-                <div className="inline-flex items-center gap-2.5 bg-[#eaf0ff] border border-[#cddbfb] text-[#2a3bd0] text-[10px] sm:text-[11.5px] font-bold px-4 h-9 rounded-full mb-7 tracking-[0.16em] uppercase">
-                  <Zap className="w-4 h-4 fill-[#2a3bd0]" />
-                  TAX AUTOMATION SOLUTION FOR BUSINESS
-                </div>
-
-                <h1 className="text-[52px] sm:text-[68px] lg:text-[60px] xl:text-[76px] 2xl:text-[88px] font-extrabold text-[#0b1140] leading-[1.02] mb-7 tracking-[-0.045em]">
-                  Tax compliance.
-                  <br />
-                  <span className="bg-gradient-to-r from-[#1d6bf3] via-[#4a45ee] to-[#8b3cf0] bg-clip-text text-transparent">
-                    On autopilot.
-                  </span>
-                </h1>
-
-                <p className="text-base sm:text-lg xl:text-[21px] text-[#4b5675] mb-9 leading-[1.7] max-w-[610px]">
-                  Build smarter tax workflows, connect your business systems,
-                  and simplify compliance operations — from one automation
-                  platform.
-                </p>
-
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-8">
-                  <button
-                    type="button"
-                    disabled
-                    aria-disabled="true"
-                    className="inline-flex items-center justify-center gap-3 bg-[#2347e6] text-white px-8 h-[58px] rounded-xl font-semibold text-base sm:text-lg shadow-lg shadow-blue-600/25 cursor-not-allowed"
-                  >
-                    <ArrowRight className="w-6 h-6" />
-                    Explore the platform
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    aria-disabled="true"
-                    className="inline-flex items-center justify-center gap-3 bg-white/60 border border-[#3b5bf0] text-[#0b1140] px-8 h-[58px] rounded-xl font-semibold text-base sm:text-lg cursor-not-allowed"
-                  >
-                    <PlayCircle className="w-6 h-6 text-[#2347e6]" />
-                    See how it works
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:text-[15px] text-[#5d6a8a]">
-                  <span>Workflow automation</span>
-                  <span className="text-slate-400">·</span>
-                  <span>API integrations</span>
-                  <span className="text-slate-400">·</span>
-                  <span>Compliance operations</span>
-                </div>
-
-                <div
-                  id="free-tools"
-                  className="mt-10 max-w-[600px] rounded-2xl border border-[#e3e9f6] bg-white shadow-[0_16px_40px_-20px_rgba(40,60,160,0.2)] overflow-hidden"
-                >
-                  <div className="flex items-center justify-between px-5 h-12 border-b border-slate-100">
-                    <h2 className="text-[15px] font-bold text-[#0b1140]">Free tools to try</h2>
-                  </div>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-slate-100">
-                    {freeTools.map((tool) => {
-                      const Icon = tool.icon
-                      return (
-                        <li key={tool.title} className="bg-white">
-                          <button
-                            onClick={tool.onClick}
-                            className="group w-full h-full flex items-center gap-3 px-4 py-4 text-left hover:bg-slate-50 transition-colors"
-                          >
-                            <span className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                              tool.isActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
-                            }`}>
-                              <Icon className="w-[18px] h-[18px]" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className={`block text-[14px] font-semibold leading-snug ${
-                                tool.isActive ? 'text-[#0b1140]' : 'text-slate-700'
-                              }`}>
-                                {tool.title}
-                              </span>
-                              <span className="mt-1.5 flex items-center gap-2">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                  tool.tag === 'NEW'
-                                    ? 'text-red-700 bg-red-100 ring-1 ring-red-200'
-                                    : tool.isActive
-                                      ? 'text-blue-700 bg-blue-100'
-                                      : 'text-slate-500 bg-slate-100'
-                                }`}>
-                                  {tool.tag}
-                                </span>
-                                <span className={`inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap ${
-                                  tool.isActive ? 'text-blue-600' : 'text-slate-400'
-                                }`}>
-                                  {tool.isActive ? 'Open tool' : 'Notify me'}
-                                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                                </span>
-                              </span>
-                            </span>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              </div>
-
-              <div className="relative min-w-0">
-                <WorkflowCard />
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <footer className="w-full bg-slate-900 text-slate-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-center">
-            <span className="font-bold text-white">
-              Taxflow <span className="text-blue-300">Africa</span>
-            </span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">
-              © {new Date().getFullYear()} All rights reserved.
-            </span>
-            <span className="text-slate-600">|</span>
-            <Link href="/terms" className="text-slate-300 hover:text-white transition-colors">
-              Terms &amp; Conditions
-            </Link>
-            <span className="text-slate-600">|</span>
-            <Link href="/privacy" className="text-slate-300 hover:text-white transition-colors">
-              Privacy Policy
-            </Link>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">
-              Official KRA Ushuru Mashinani Partner.
-            </span>
-          </div>
-        </div>
       </footer>
+
+      {/* ════════════════ FIXED CORNER ARROW (Spotify Style) ════════════════ */}
+      {!isSupplierDrawerOpen && (
+        <div 
+          onClick={() => setIsSupplierDrawerOpen(true)}
+          className="fixed right-0 top-1/2 -translate-y-1/2 w-6 h-16 bg-white rounded-l-xl shadow-[-4px_0_10px_rgba(0,0,0,0.1)] flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-all z-40 hidden lg:flex border border-slate-200 border-r-0"
+          title="Open Supplier Services"
+        >
+          <ChevronLeft className="w-5 h-5 text-slate-500" />
+        </div>
+      )}
+
+      {/* ════════════════ SUPPLIER DRAWER ════════════════ */}
+      {isSupplierDrawerOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex justify-end" onClick={() => setIsSupplierDrawerOpen(false)}>
+          <div className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col relative" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h2 className="text-lg font-bold text-[#0a2540]">Supplier Compliance</h2>
+              <button onClick={() => setIsSupplierDrawerOpen(false)} className="text-slate-500 hover:text-slate-800 p-1 bg-white rounded-full border border-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {[
+                { title: 'Nil Tax Automation', icon: FileCheck },
+                { title: 'Landlord Tax Management', icon: Home },
+                { title: 'Supplier Verification Compliance', icon: UserCheck },
+                { title: 'Exempted Tax Check', icon: ShieldCheck },
+                { title: 'Business Invoice Track', icon: Receipt },
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setComingSoonTitle(item.title);
+                    setShowComingSoon(true);
+                    setIsSupplierDrawerOpen(false);
+                  }}
+                  className="w-full text-left px-5 py-4 border-b border-slate-100 flex items-center gap-4 hover:bg-slate-50 transition-colors group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[15px] font-semibold text-slate-700 group-hover:text-[#0a2540]">{item.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════ MODALS ════════════════ */}
 
-      {/* Find Nearest Cyber */}
       {showNearestCyberForm && (
         <ModalOverlay onClose={() => setShowNearestCyberForm(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5">
-              <MapPin className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-blue-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5 ring-1 ring-blue-100">
+              <MapPin className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Find Nearest Cyber/Print Point</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">Locate cybercafés or print shops near your current location</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Find Nearest Cyber/Print Point</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-2">Locate cybercafés or print shops near your current location</p>
           </div>
 
           {isLocating ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-500">Getting your location...</p>
+              <p className="text-slate-500">Getting your location...</p>
             </div>
           ) : locationError ? (
             <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
@@ -1052,28 +1223,28 @@ const freeTools = [
             </div>
           ) : userLocation ? (
             <div>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Navigation className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm font-semibold text-gray-700">Your Location</span>
+                  <span className="text-sm font-semibold text-slate-700">Your Location</span>
                 </div>
-                <p className="text-xs text-gray-500 font-mono">
+                <p className="text-xs text-slate-500 font-mono">
                   Lat: {userLocation.lat.toFixed(4)}, Lng: {userLocation.lng.toFixed(4)}
                 </p>
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nearby Cybercafés &amp; Print Points</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nearby Cybercafés &amp; Print Points</p>
                 {[
                   { name: 'Cyber Hub Kenya', dist: '0.3 km', address: 'Tom Mboya Street' },
                   { name: 'Digital Point Cyber', dist: '0.8 km', address: 'Moi Avenue' },
                   { name: 'E-Solutions Cyber', dist: '1.2 km', address: 'Kenyatta Avenue' },
                   { name: 'Quick Print & Cyber', dist: '1.5 km', address: 'River Road' },
                 ].map((cyber, i) => (
-                  <div key={i} className="flex items-start justify-between p-3 bg-white border border-gray-200 rounded-xl">
+                  <div key={i} className="flex items-start justify-between p-3 bg-white border border-slate-200 rounded-xl">
                     <div>
-                      <p className="font-semibold text-gray-800 text-sm">{cyber.name}</p>
-                      <p className="text-xs text-gray-400">{cyber.address}</p>
+                      <p className="font-semibold text-slate-800 text-sm">{cyber.name}</p>
+                      <p className="text-xs text-slate-400">{cyber.address}</p>
                     </div>
                     <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{cyber.dist}</span>
                   </div>
@@ -1082,7 +1253,7 @@ const freeTools = [
                   href={`https://www.google.com/maps/search/cybercafe/@${userLocation.lat},${userLocation.lng},14z`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full mt-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2 text-base sm:text-lg shadow-lg shadow-blue-100"
+                  className="w-full mt-4 bg-[#0a2540] text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-[#112d4e] transition-all flex items-center justify-center gap-2 text-base sm:text-lg shadow-lg shadow-slate-200"
                 >
                   <ExternalLink className="h-5 w-5" />
                   Open in Google Maps
@@ -1091,8 +1262,8 @@ const freeTools = [
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">Click the button below to find cybercafés or print points near you.</p>
-              <button onClick={handleFindNearestCyber} className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all text-base sm:text-lg shadow-lg shadow-blue-100">
+              <p className="text-slate-500 mb-4">Click the button below to find cybercafés or print points near you.</p>
+              <button onClick={handleFindNearestCyber} className="bg-[#0a2540] text-white px-8 py-4 rounded-xl font-semibold hover:bg-[#112d4e] transition-all text-base sm:text-lg shadow-lg">
                 Locate Me
               </button>
             </div>
@@ -1100,54 +1271,52 @@ const freeTools = [
         </ModalOverlay>
       )}
 
-      {/* Coming Soon */}
       {showComingSoon && (
         <ModalOverlay onClose={() => setShowComingSoon(false)} size="large">
           <div className="text-center">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6">
-              <Clock className="h-10 w-10 sm:h-12 sm:w-12 text-white" />
+            <div className="bg-amber-50 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6 ring-1 ring-amber-100">
+              <ClockIcon className="h-10 w-10 sm:h-12 sm:w-12 text-amber-500" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Coming Soon!</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">
-              <span className="font-semibold text-gray-700">{comingSoonTitle}</span> are currently in development.
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Coming Soon!</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-2">
+              <span className="font-semibold text-slate-700">{comingSoonTitle}</span> are currently in development.
             </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-6">
+            <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 mt-6">
               <div className="flex items-center justify-center gap-2">
                 <AlertCircle className="h-5 w-5 text-amber-500" />
                 <span className="text-sm text-amber-700">This feature will be available soon</span>
               </div>
             </div>
-            <button onClick={() => setShowComingSoon(false)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all text-base sm:text-lg shadow-lg shadow-blue-100">
+            <button onClick={() => setShowComingSoon(false)} className="w-full mt-6 bg-[#0a2540] text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-[#112d4e] transition-all text-base sm:text-lg shadow-lg">
               Got it
             </button>
           </div>
         </ModalOverlay>
       )}
 
-      {/* KRA Popup */}
       {showKRAPopup && (
         <ModalOverlay onClose={() => setShowKRAPopup(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5">
-              <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-blue-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5 ring-1 ring-blue-100">
+              <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">KRA Tax Services</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">KRA Tax Services</h2>
           </div>
           <div className="space-y-3 sm:space-y-4">
             <button
               onClick={() => { setShowKRAPopup(false); setShowCheckStatus(true) }}
-              className="w-full flex items-center justify-between p-4 sm:p-5 bg-purple-50 hover:bg-purple-100 rounded-xl transition-all border-2 border-transparent hover:border-purple-200"
+              className="w-full flex items-center justify-between p-4 sm:p-5 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all border border-slate-200 hover:border-slate-300"
             >
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-2.5">
-                  <Search className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                <div className="bg-white rounded-xl p-2.5 shadow-sm ring-1 ring-slate-200">
+                  <Search className="h-5 w-5 sm:h-6 sm:w-6 text-slate-700" />
                 </div>
                 <div className="text-left">
-                  <span className="font-semibold text-gray-900 text-base sm:text-lg">Track My Request</span>
-                  <p className="text-xs sm:text-sm text-gray-500">Check your order progress</p>
+                  <span className="font-bold text-[#0a2540] text-base sm:text-lg">Track My Request</span>
+                  <p className="text-xs sm:text-sm text-slate-500">Check your order progress</p>
                 </div>
               </div>
-              <ArrowRight className="h-5 w-5 text-purple-600" />
+              <ArrowRight className="h-5 w-5 text-slate-400" />
             </button>
           </div>
         </ModalOverlay>
@@ -1157,21 +1326,21 @@ const freeTools = [
       {showObligationsForm && (
         <ModalOverlay onClose={() => { setShowObligationsForm(false); resetObligationsForm() }} size="large">
           <div className="text-center mb-6">
-            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-emerald-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 ring-1 ring-emerald-100">
+              <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Check My Obligations</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-1">View all your active tax obligations from KRA.</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Check My Obligations</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-1">View all your active tax obligations from KRA.</p>
           </div>
 
-          <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-200/60">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
               Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
               <a
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
               >
                 How we handle your data
               </a>
@@ -1179,7 +1348,7 @@ const freeTools = [
           </div>
 
           {obligationsError && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-700">{obligationsError}</p>
             </div>
@@ -1188,7 +1357,7 @@ const freeTools = [
           {!obligationsResult ? (
             <form className="space-y-4" onSubmit={handleObligationsSubmit}>
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                   KRA PIN <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -1198,17 +1367,34 @@ const freeTools = [
                   onChange={(e) => setObligationsPin(e.target.value.toUpperCase())}
                   placeholder="e.g. A020360004V"
                   disabled={isFetchingObligations}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-slate-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div className="flex justify-start my-2">
+                <Turnstile
+                  ref={obligationsTurnstileRef}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => {
+                    obligationsTurnstileTokenRef.current = token
+                    setObligationsTurnstileToken(token)
+                    setObligationsError('')
+                  }}
+                  onExpire={() => {
+                    obligationsTurnstileTokenRef.current = null
+                    setObligationsTurnstileToken(null)
+                  }}
+                  options={{ theme: 'light' }}
                 />
               </div>
 
               <button
                 type="submit"
-                disabled={isFetchingObligations}
-                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                  isFetchingObligations
-                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
-                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                disabled={isFetchingObligations || !obligationsTurnstileToken}
+                className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
+                  isFetchingObligations || !obligationsTurnstileToken
+                    ? 'bg-slate-300 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
                 }`}
               >
                 {isFetchingObligations ? (
@@ -1226,19 +1412,19 @@ const freeTools = [
             </form>
           ) : (
             <div className="mt-5 space-y-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <div className="bg-green-50 px-4 py-2.5 border-b border-green-200 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-semibold text-green-800">Obligations Found ({obligationsResult.length})</span>
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-800">Obligations Found ({obligationsResult.length})</span>
                 </div>
                 <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
                   {obligationsResult.map((ob) => (
-                    <div key={ob.id} className="flex items-start justify-between p-3 bg-gray-50 border border-gray-100 rounded-lg">
+                    <div key={ob.id} className="flex items-start justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{ob.name}</p>
-                        <p className="text-[10px] text-gray-500 font-mono uppercase">{ob.id}</p>
+                        <p className="text-sm font-semibold text-slate-800 truncate">{ob.name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono uppercase">{ob.id}</p>
                       </div>
-                      <span className="ml-3 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                      <span className="ml-3 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-slate-600 border border-slate-200">
                         {ob.type}
                       </span>
                     </div>
@@ -1248,16 +1434,16 @@ const freeTools = [
 
               <button
                 onClick={resetObligationsForm}
-                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+                className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 Check Another PIN
               </button>
             </div>
           )}
 
-          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-400">
-              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-400">
+              Powered by <span className="font-semibold text-slate-500">Xeco Group</span>
             </p>
           </div>
         </ModalOverlay>
@@ -1267,21 +1453,21 @@ const freeTools = [
       {showVerifyForm && (
         <ModalOverlay onClose={() => { setShowVerifyForm(false); resetVerifyForm() }} size="large">
           <div className="text-center mb-6">
-            <div className="bg-gradient-to-r from-sky-600 to-sky-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4">
-              <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-violet-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 ring-1 ring-violet-100">
+              <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8 text-violet-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Verify KRA PIN</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-1">Confirm a KRA PIN and check its status instantly.</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Verify KRA PIN</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-1">Confirm a KRA PIN and check its status instantly.</p>
           </div>
 
-          <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-200/60">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
               Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
               <a
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
               >
                 How we handle your data
               </a>
@@ -1289,7 +1475,7 @@ const freeTools = [
           </div>
 
           {verifyError && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-700">{verifyError}</p>
             </div>
@@ -1298,7 +1484,7 @@ const freeTools = [
           {!verifyResult ? (
             <form className="space-y-4" onSubmit={handleVerifySubmit}>
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                   KRA PIN <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -1308,17 +1494,34 @@ const freeTools = [
                   onChange={(e) => setVerifyPin(e.target.value.toUpperCase())}
                   placeholder="e.g. A020360004V"
                   disabled={isVerifying}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-slate-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div className="flex justify-start my-2">
+                <Turnstile
+                  ref={verifyTurnstileRef}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => {
+                    verifyTurnstileTokenRef.current = token
+                    setVerifyTurnstileToken(token)
+                    setVerifyError('')
+                  }}
+                  onExpire={() => {
+                    verifyTurnstileTokenRef.current = null
+                    setVerifyTurnstileToken(null)
+                  }}
+                  options={{ theme: 'light' }}
                 />
               </div>
 
               <button
                 type="submit"
-                disabled={isVerifying}
-                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                  isVerifying
-                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
-                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                disabled={isVerifying || !verifyTurnstileToken}
+                className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
+                  isVerifying || !verifyTurnstileToken
+                    ? 'bg-slate-300 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
                 }`}
               >
                 {isVerifying ? (
@@ -1336,47 +1539,47 @@ const freeTools = [
             </form>
           ) : (
             <div className="mt-5 space-y-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <div className="bg-green-50 px-4 py-2.5 border-b border-green-200 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-semibold text-green-800">PIN Verified Successfully</span>
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-800">PIN Verified Successfully</span>
                 </div>
                 <div className="p-4 space-y-3 text-sm">
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">Taxpayer Name</span>
-                    <span className="font-medium text-gray-900">{verifyResult.taxpayerName}</span>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">Taxpayer Name</span>
+                    <span className="font-semibold text-slate-900">{verifyResult.taxpayerName}</span>
                   </div>
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">KRA PIN</span>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">KRA PIN</span>
                     <span className="font-mono font-bold text-[#0a2540]">{verifyResult.kraPin}</span>
                   </div>
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">Status</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                      verifyResult.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">Status</span>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                      verifyResult.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                     }`}>
                       {verifyResult.status}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Taxpayer Type</span>
-                    <span className="font-medium text-gray-900">{verifyResult.taxpayerType}</span>
+                    <span className="text-slate-500">Taxpayer Type</span>
+                    <span className="font-semibold text-slate-900">{verifyResult.taxpayerType}</span>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={resetVerifyForm}
-                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+                className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 Verify Another PIN
               </button>
             </div>
           )}
 
-          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-400">
-              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-400">
+              Powered by <span className="font-semibold text-slate-500">Xeco Group</span>
             </p>
           </div>
         </ModalOverlay>
@@ -1386,258 +1589,418 @@ const freeTools = [
       {showFindPINForm && (
         <ModalOverlay onClose={() => { setShowFindPINForm(false); resetPinForm() }} size="large">
           <div className="text-center mb-6">
-            <div className="bg-gradient-to-r from-sky-600 to-sky-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4">
-              <Search className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-sky-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 ring-1 ring-sky-100">
+              <Search className="h-7 w-7 sm:h-8 sm:w-8 text-sky-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Find My KRA PIN</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-1">Retrieve your KRA PIN instantly</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Find My KRA PIN</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-1">Retrieve your KRA PIN or request a certificate</p>
           </div>
 
-          <div className="bg-[#E8F2EC] rounded-lg p-3.5 mb-5">
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-              We use your ID to retrieve your KRA PIN. Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-200/60">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
               <a
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-[#1a3a5c] transition-colors"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
               >
                 How we handle your data
               </a>
             </p>
           </div>
 
-          {pinError && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{pinError}</p>
-            </div>
-          )}
-
-          <form className="space-y-4" onSubmit={handlePinSubmit}>
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-                ID / PASSPORT NUMBER <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={pinId}
-                onChange={(e) => setPinId(e.target.value)}
-                placeholder="e.g. 12345678"
-                disabled={isLoadingPin || showPinResult}
-                className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-1.5">TAXPAYER TYPE</label>
-              <div className="relative">
-                <select
-                  value={taxpayerType}
-                  onChange={(e) => setTaxpayerType(e.target.value)}
-                  disabled={isLoadingPin || showPinResult}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-gray-900 appearance-none focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {TAXPAYER_TYPES.map((t) => (
-                    <option key={t.code} value={t.code}>{t.label}</option>
-                  ))}
-                </select>
-                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                  <ChevronRight className="w-4 h-4 rotate-90" />
-                </div>
-              </div>
-            </div>
-
-            {!showPinResult && !isLoadingPin && (
-              <div className="pt-1">
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={optIn}
-                    onChange={(e) => {
-                      setOptIn(e.target.checked)
-                      if (!e.target.checked) setSubEmail('')
-                      setSubscribeStatus('idle')
-                    }}
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#0a2540] focus:ring-[#0a2540] cursor-pointer"
-                  />
-                  <span className="text-xs sm:text-sm text-gray-700 leading-snug">
-                    Update me when other services are live
-                  </span>
-                </label>
-
-                {optIn && (
-                  <div className="mt-3">
-                    <label className="block text-[11px] font-semibold text-gray-600 mb-1 uppercase tracking-wide">
-                      Email <span className="text-gray-400 font-normal normal-case">(optional)</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={subEmail}
-                      onChange={(e) => setSubEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#0a2540] focus:border-[#0a2540] transition-all"
-                    />
-                    {subscribeStatus === 'saved' && (
-                      <p className="mt-1.5 text-[11px] text-green-600 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> You&apos;re subscribed.
-                      </p>
-                    )}
-                    {subscribeStatus === 'error' && (
-                      <p className="mt-1.5 text-[11px] text-red-500">
-                        Couldn&apos;t save your preference. You can try again.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!showPinResult && (
+          <div className="mb-6">
+            <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+              Use KRA PIN or ID?
+            </label>
+            <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 p-1 w-full">
               <button
-                type="submit"
-                disabled={isLoadingPin}
-                className={`w-full font-semibold text-base py-3 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 mt-2 ${
-                  isLoadingPin
-                    ? 'bg-[#0a2540]/70 text-white cursor-wait'
-                    : 'bg-[#0a2540] hover:bg-[#1a3a5c] text-white'
+                type="button"
+                onClick={() => { setLookupMode('id'); setPinId(''); setPinError(''); setReprintOnlyError('') }}
+                className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                  lookupMode === 'id'
+                    ? 'bg-white text-[#0a2540] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                {isLoadingPin ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Fetching your KRA PIN...
-                  </>
-                ) : (
-                  <>Find My KRA PIN<span className="text-lg leading-none">→</span></>
-                )}
+                Use ID (free)
               </button>
-            )}
-          </form>
-
-          {isLoadingPin && !showPinResult && (
-            <div className="mt-5 space-y-4 animate-pulse">
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-gray-200" />
-                  <div className="h-4 w-24 bg-gray-200 rounded" />
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <div className="h-4 w-20 bg-gray-200 rounded" />
-                    <div className="h-4 w-32 bg-gray-200 rounded" />
-                  </div>
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <div className="h-4 w-16 bg-gray-200 rounded" />
-                    <div className="h-4 w-28 bg-gray-200 rounded" />
-                  </div>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => { setLookupMode('pin'); setPinId(''); setPinError(''); setReprintOnlyError('') }}
+                className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                  lookupMode === 'pin'
+                    ? 'bg-white text-[#0a2540] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Use KRA PIN ({REPRINT_FEE} KES)
+              </button>
             </div>
-          )}
+          </div>
 
-          {showPinResult && pinResult && (
-            <div className="mt-5 space-y-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-semibold text-gray-800">PIN Found</span>
-                </div>
-                <div className="p-4 space-y-3 text-sm">
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">Taxpayer</span>
-                    <span className="font-medium text-gray-900">{maskName(pinResult.taxpayerName)}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                    <span className="text-gray-500">KRA PIN</span>
-                    <div className="flex items-center gap-2 relative">
-                      <span className="font-mono font-bold text-[#0a2540]">{pinResult.kraPin}</span>
-                      <button onClick={handleCopyPin} className="text-gray-400 hover:text-gray-600" title="Copy PIN">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                      </button>
-                      {copied && <span className="absolute -top-6 right-0 text-xs text-green-600 font-medium bg-white px-1.5 py-0.5 rounded shadow-sm border border-gray-100">Copied!</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {subscribeStatus === 'saved' && (
-                <div className="rounded-lg bg-green-50 border border-green-200 px-3.5 py-2.5 flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs sm:text-sm text-green-700">
-                    You&apos;ll get an email when new services go live.
-                  </p>
+          {lookupMode === 'id' && (
+            <>
+              {pinError && (
+                <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{pinError}</p>
                 </div>
               )}
 
-              {/* Reprint Flow — Pending */}
+              <form className="space-y-4" onSubmit={handlePinSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    ID / PASSPORT NUMBER <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={pinId}
+                    onChange={(e) => setPinId(e.target.value)}
+                    placeholder="e.g. 12345678"
+                    disabled={isLoadingPin || showPinResult}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">TAXPAYER TYPE</label>
+                  <div className="relative">
+                    <select
+                      value={taxpayerType}
+                      onChange={(e) => setTaxpayerType(e.target.value)}
+                      disabled={isLoadingPin || showPinResult}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all cursor-pointer disabled:bg-slate-50 disabled:cursor-not-allowed"
+                    >
+                      {TAXPAYER_TYPES.map((t) => (
+                        <option key={t.code} value={t.code}>{t.label}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <ChevronRight className="w-4 h-4 rotate-90" />
+                    </div>
+                  </div>
+                </div>
+
+                {!showPinResult && !isLoadingPin && (
+                  <div className="pt-1">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => {
+                          setAgreedToTerms(e.target.checked)
+                          if (e.target.checked) setPinError('')
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0a2540] focus:ring-[#0a2540] cursor-pointer"
+                      />
+                      <span className="text-xs sm:text-sm text-slate-600 leading-snug">
+                        I agree to submit my information and accept the{' '}
+                        <a
+                          href="/terms"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Terms and Conditions
+                        </a>.
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                {!showPinResult && (
+                  <>
+                    <div className="flex justify-start my-2">
+                      <Turnstile
+                        ref={pinTurnstileRef}
+                        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                        onSuccess={(token) => {
+                          pinTurnstileTokenRef.current = token
+                          setPinTurnstileToken(token)
+                          setPinError('')
+                        }}
+                        onExpire={() => {
+                          pinTurnstileTokenRef.current = null
+                          setPinTurnstileToken(null)
+                        }}
+                        options={{ theme: 'light' }}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isLoadingPin || !pinTurnstileToken || !agreedToTerms}
+                      className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
+                        isLoadingPin || !pinTurnstileToken || !agreedToTerms
+                          ? 'bg-slate-300 text-white cursor-wait'
+                          : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
+                      }`}
+                    >
+                      {isLoadingPin ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Fetching your KRA PIN...
+                        </>
+                      ) : (
+                        <>Find My KRA PIN<span className="text-lg leading-none">→</span></>
+                      )}
+                    </button>
+                  </>
+                )}
+              </form>
+
+              {isLoadingPin && !showPinResult && (
+                <div className="mt-5 space-y-4 animate-pulse">
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-slate-200" />
+                      <div className="h-4 w-24 bg-slate-200 rounded" />
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <div className="h-4 w-20 bg-slate-200 rounded" />
+                        <div className="h-4 w-32 bg-slate-200 rounded" />
+                      </div>
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <div className="h-4 w-16 bg-slate-200 rounded" />
+                        <div className="h-4 w-28 bg-slate-200 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showPinResult && pinResult && (
+                <div className="mt-5 space-y-4">
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      <span className="text-sm font-semibold text-slate-800">PIN Found</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-sm">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                        <span className="text-slate-500">Taxpayer</span>
+                        <span className="font-semibold text-slate-900">{maskName(pinResult.taxpayerName)}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                        <span className="text-slate-500">KRA PIN</span>
+                        <div className="flex items-center gap-2 relative">
+                          <span className="font-mono font-bold text-[#0a2540] text-base">{pinResult.kraPin}</span>
+                          <button onClick={handleCopyPin} className="text-slate-400 hover:text-slate-600 p-1" title="Copy PIN">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
+                          {copied && <span className="absolute -top-8 right-0 text-xs text-white font-medium bg-slate-800 px-2 py-1 rounded shadow-sm">Copied!</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {reprintFlow === 'pending' && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
+                      <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-100 shadow-sm">
+                        <Smartphone className="h-7 w-7 animate-pulse text-amber-500" />
+                      </div>
+                      <p className="mt-4 text-[15px] font-bold text-amber-900">Waiting for confirmation</p>
+                      <p className="mt-1 text-[11.5px] text-amber-700">
+                        Check your phone and enter your M-Pesa PIN for KES {REPRINT_FEE}.
+                      </p>
+                      <p className="mt-2 text-[11px] text-amber-600/80">
+                        {(reprintPollCount * 2.5).toFixed(0)}s elapsed
+                      </p>
+                    </div>
+                  )}
+
+                  {reprintFlow === 'success' && reprintSuccess && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
+                      <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white ring-4 ring-emerald-100 shadow-sm">
+                        <CheckCircle className="h-7 w-7 text-emerald-500" />
+                      </div>
+                      <p className="mt-3 text-[17px] font-bold text-emerald-900">Payment Successful</p>
+                      <p className="mt-1.5 text-[12.5px] text-emerald-700">
+                        KES {reprintSuccess.amount} paid for certificate reprint
+                      </p>
+                      {reprintSuccess.receipt && (
+                        <p className="mt-1 text-[11px] font-mono text-emerald-600">
+                          Receipt: {reprintSuccess.receipt}
+                        </p>
+                      )}
+                      <p className="mt-3 text-[12px] text-emerald-800">
+                        Your certificate will be sent to{' '}
+                        <span className="font-semibold">{reprintSuccess.email}</span>
+                      </p>
+                      <button
+                        onClick={resetReprintForm}
+                        className="mt-5 w-full h-11 rounded-xl bg-[#0a2540] text-white text-[13px] font-semibold hover:bg-[#112d4e] transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
+
+                  {reprintFlow === 'error' && reprintError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-bold text-red-800">Payment Failed</p>
+                          <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintError}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={resetReprintForm}
+                        className="mt-3 h-9 rounded-lg bg-red-600 px-4 text-[12px] font-semibold text-white hover:bg-red-700"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+
+                  {reprintFlow === 'idle' && isReprintWindowOpen() && (
+                    <button
+                      onClick={handleOpenReprintForm}
+                      className="w-full bg-white border border-emerald-500 text-emerald-700 font-semibold text-sm py-3 rounded-xl hover:bg-emerald-50 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <Download className="w-4 h-4" />
+                      Reprint KRA Certificate
+                    </button>
+                  )}
+
+                  <button
+                    onClick={resetPinForm}
+                    className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    Fetch Another PIN
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {lookupMode === 'pin' && (
+            <>
+              {reprintOnlyError && (
+                <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{reprintOnlyError}</p>
+                </div>
+              )}
+
+              <form className="space-y-4" onSubmit={handlePinModeSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    KRA PIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={pinId}
+                    onChange={(e) => setPinId(e.target.value.toUpperCase())}
+                    placeholder="e.g. A0123456789Z"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase"
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Enter the KRA PIN you already have. We'll request the certificate from KRA and email it to you.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Email Address <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={reprintOnlyEmail}
+                    onChange={(e) => setReprintOnlyEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Your certificate will be sent here.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    M-Pesa Payment Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={reprintOnlyPaymentNo}
+                    onChange={(e) => setReprintOnlyPaymentNo(e.target.value)}
+                    placeholder="e.g. 07XXXXXXXX"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    You'll receive an M-Pesa STK prompt for KES {REPRINT_FEE}.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={reprintFlow === 'processing'}
+                  className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
+                    reprintFlow === 'processing'
+                      ? 'bg-slate-300 text-white cursor-wait'
+                      : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
+                  }`}
+                >
+                  {reprintFlow === 'processing' ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending request...
+                    </>
+                  ) : (
+                    <>Pay KES {REPRINT_FEE} &amp; Request Certificate →</>
+                  )}
+                </button>
+              </form>
+
               {reprintFlow === 'pending' && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
-                  <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-200">
-                    <Smartphone className="h-7 w-7 animate-pulse text-amber-600" />
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
+                  <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white ring-4 ring-amber-100 shadow-sm">
+                    <Smartphone className="h-7 w-7 animate-pulse text-amber-500" />
                   </div>
                   <p className="mt-4 text-[15px] font-bold text-amber-900">Waiting for confirmation</p>
                   <p className="mt-1 text-[11.5px] text-amber-700">
                     Check your phone and enter your M-Pesa PIN for KES {REPRINT_FEE}.
                   </p>
-                  <p className="mt-2 text-[11px] text-amber-700/80">
+                  <p className="mt-2 text-[11px] text-amber-600/80">
                     {(reprintPollCount * 2.5).toFixed(0)}s elapsed
                   </p>
-
-                  <div className="mt-5 space-y-2.5 text-left">
-                    {['Request sent to your phone', 'Enter your PIN', 'Confirming with M-Pesa'].map((label, idx) => {
-                      const active = reprintPollCount < 1 ? 0 : reprintPollCount < 3 ? 1 : 2
-                      const done = idx < active
-                      const current = idx === active
-                      return (
-                        <div key={label} className="flex items-center gap-2.5">
-                          <div className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
-                            done ? 'bg-emerald-500' : current ? 'bg-amber-500' : 'bg-amber-200'
-                          }`}>
-                            {done ? (
-                              <CheckCircle className="h-3 w-3 text-white" />
-                            ) : current ? (
-                              <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
-                            ) : null}
-                          </div>
-                          <span className={`text-[12.5px] ${
-                            idx <= active ? 'font-medium text-amber-900' : 'text-amber-700/70'
-                          }`}>
-                            {label}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-
                   <button
                     onClick={resetReprintForm}
-                    className="mt-4 text-[11.5px] font-medium text-amber-800 underline underline-offset-2"
+                    className="mt-4 text-[11.5px] font-medium text-amber-800 underline underline-offset-2 hover:text-amber-900"
                   >
-                    I didn&apos;t receive a prompt — start over
+                    I didn't receive a prompt — start over
                   </button>
                 </div>
               )}
 
-              {/* Reprint Flow — Success */}
               {reprintFlow === 'success' && reprintSuccess && (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
-                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100">
-                    <CheckCircle className="h-7 w-7 text-emerald-600" />
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
+                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white ring-4 ring-emerald-100 shadow-sm">
+                    <CheckCircle className="h-7 w-7 text-emerald-500" />
                   </div>
                   <p className="mt-3 text-[17px] font-bold text-emerald-900">Payment Successful</p>
                   <p className="mt-1.5 text-[12.5px] text-emerald-700">
                     KES {reprintSuccess.amount} paid for certificate reprint
                   </p>
                   {reprintSuccess.receipt && (
-                    <p className="mt-1 text-[11px] font-mono text-emerald-700">
+                    <p className="mt-1 text-[11px] font-mono text-emerald-600">
                       Receipt: {reprintSuccess.receipt}
                     </p>
                   )}
@@ -1645,96 +2008,77 @@ const freeTools = [
                     Your certificate will be sent to{' '}
                     <span className="font-semibold">{reprintSuccess.email}</span>
                   </p>
-
                   <button
-                    onClick={resetReprintForm}
-                    className="mt-5 w-full h-10 rounded-lg bg-emerald-700 text-white text-[13px] font-semibold hover:bg-emerald-800 transition-colors"
+                    onClick={() => {
+                      resetPinForm()
+                      setLookupMode('id')
+                      setReprintOnlyEmail('')
+                      setReprintOnlyPaymentNo('')
+                      setReprintFlow('idle')
+                    }}
+                    className="mt-5 w-full h-11 rounded-xl bg-[#0a2540] text-white text-[13px] font-semibold hover:bg-[#112d4e] transition-colors"
                   >
                     Done
                   </button>
                 </div>
               )}
 
-              {/* Reprint Flow — Error */}
-              {reprintFlow === 'error' && reprintError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+              {reprintFlow === 'error' && reprintOnlyError && (
+                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-4">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-bold text-red-800">Payment Failed</p>
-                      <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintError}</p>
+                      <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintOnlyError}</p>
                     </div>
                   </div>
                   <button
-                    onClick={resetReprintForm}
+                    onClick={() => { setReprintFlow('idle'); setReprintOnlyError('') }}
                     className="mt-3 h-9 rounded-lg bg-red-600 px-4 text-[12px] font-semibold text-white hover:bg-red-700"
                   >
                     Try Again
                   </button>
                 </div>
               )}
-
-              {/* Reprint KRA Certificate button */}
-              {reprintFlow === 'idle' && isReprintWindowOpen() && (
-                <button
-                  onClick={handleOpenReprintForm}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-100"
-                >
-                  <Download className="w-4 h-4" />
-                  Reprint KRA Certificate
-                </button>
-              )}
-
-              <button
-                onClick={resetPinForm}
-                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
-              >
-                Fetch Another PIN
-              </button>
-            </div>
+            </>
           )}
 
-          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-400">
-              Powered by <span className="font-semibold text-gray-500">Xeco Group</span>
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-400">
+              Powered by <span className="font-semibold text-slate-500">Xeco Group</span>
             </p>
           </div>
         </ModalOverlay>
       )}
 
-      {/* ════════════ REPRINT FORM ════════════ */}
       {showReprintForm && (
         <ModalOverlay onClose={() => { setShowReprintForm(false); resetReprintForm() }} size="compact">
-          <div className="mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-md flex-shrink-0">
-                <FileText className="w-4 h-4 text-white" />
+          <div className="mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                <FileText className="w-5 h-5 text-slate-700" />
               </div>
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-                KRA PIN Reprint Form
-              </h2>
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-[#0a2540] tracking-tight">
+                  KRA PIN Reprint
+                </h2>
+                <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed mt-0.5">
+                  PDF will be shared to your email.
+                </p>
+              </div>
             </div>
-            <p className="text-[11px] sm:text-xs text-gray-500 leading-relaxed mt-2">
-              Fill details below. PDF will be shared to your email.
-            </p>
-          </div>
-
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-full px-3 py-1.5 mb-4 inline-block">
-            <p className="text-[10px] font-bold text-white uppercase tracking-wider">
-              KRA PIN Reprint Details
-            </p>
           </div>
 
           {reprintError && (
-            <div className="mb-3 rounded-lg bg-red-50 border border-red-200 p-2.5 flex items-start gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-red-700">{reprintError}</p>
             </div>
           )}
 
-          <form onSubmit={handleReprintSubmit} className="space-y-3">
+          <form onSubmit={handleReprintSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-gray-800 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Full Name
               </label>
               <input
@@ -1742,12 +2086,12 @@ const freeTools = [
                 value={reprintFullName}
                 readOnly
                 placeholder="Enter full name"
-                className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder-gray-400 cursor-not-allowed text-sm"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-600 placeholder-slate-400 cursor-not-allowed text-sm font-medium"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-800 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 National ID or KRA PIN
               </label>
               <input
@@ -1755,12 +2099,12 @@ const freeTools = [
                 value={reprintIdOrPin}
                 readOnly
                 placeholder="Enter National ID or KRA PIN"
-                className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder-gray-400 cursor-not-allowed text-sm"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-600 placeholder-slate-400 cursor-not-allowed text-sm font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-800 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email Address
               </label>
               <input
@@ -1769,12 +2113,12 @@ const freeTools = [
                 value={reprintEmail}
                 onChange={(e) => setReprintEmail(e.target.value)}
                 placeholder="Enter email address"
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-sm"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all text-sm"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-800 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Payment No
               </label>
               <input
@@ -1783,40 +2127,40 @@ const freeTools = [
                 value={reprintPaymentNo}
                 onChange={(e) => setReprintPaymentNo(e.target.value)}
                 placeholder="e.g. 07XXXXXXXX"
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-sm"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all text-sm"
               />
-              <p className="mt-1 text-[10px] text-gray-500">
+              <p className="mt-1.5 text-[10px] text-slate-500">
                 M-Pesa number that will receive the STK push prompt.
               </p>
             </div>
 
-            <div className="flex gap-2.5 pt-1">
+            <div className="flex gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => { setShowReprintForm(false); resetReprintForm() }}
-                className="flex-1 bg-white border-2 border-blue-500 text-blue-600 hover:bg-blue-50 font-bold text-sm py-2.5 rounded-lg transition-all"
+                className="flex-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold text-sm py-3 rounded-xl transition-all"
               >
-                Close
+                Cancel
               </button>
               <button
                 type="submit"
                 disabled={reprintFlow === 'processing'}
-                className={`flex-1 font-bold text-sm py-2.5 rounded-lg transition-all shadow-md flex items-center justify-center gap-2 ${
+                className={`flex-1 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                   reprintFlow === 'processing'
-                    ? 'bg-blue-400 text-white cursor-wait'
-                    : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white'
+                    ? 'bg-slate-300 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
                 }`}
               >
                 {reprintFlow === 'processing' ? (
                   <>
-                    <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Sending request…
+                    Sending...
                   </>
                 ) : (
-                  <>Pay Ksh {REPRINT_FEE} &amp; Submit</>
+                  <>Pay Ksh {REPRINT_FEE}</>
                 )}
               </button>
             </div>
@@ -1824,78 +2168,75 @@ const freeTools = [
         </ModalOverlay>
       )}
 
-      {/* Payment Modal */}
       {showPayment && (
         <ModalOverlay onClose={() => setShowPayment(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
-            <div className="bg-gradient-to-r from-green-600 to-green-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5">
-              <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-emerald-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5 ring-1 ring-emerald-100">
+              <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Complete Payment</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">Pay KES {REPRINT_FEE} via M-Pesa</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Complete Payment</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-2">Pay KES {REPRINT_FEE} via M-Pesa</p>
           </div>
           <form onSubmit={handlePaymentSubmit} className="space-y-5">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
-              <p className="text-sm text-gray-600">Amount to Pay</p>
-              <p className="text-3xl sm:text-4xl font-bold text-gray-900 mt-1">KES {REPRINT_FEE}.00</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center">
+              <p className="text-sm text-slate-500 font-medium">Amount to Pay</p>
+              <p className="text-3xl sm:text-4xl font-extrabold text-[#0a2540] mt-1">KES {REPRINT_FEE}.00</p>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">M-Pesa Phone Number</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">M-Pesa Phone Number</label>
               <input
                 type="tel"
                 required
-                className="w-full px-4 py-3.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base"
+                className="w-full px-4 py-3.5 rounded-xl border border-slate-300 focus:border-[#0a2540] focus:ring-2 focus:ring-[#0a2540]/20 outline-none transition-all text-base"
                 placeholder="0712 345 678"
                 value={paymentData.phoneNumber}
                 onChange={(e) => setPaymentData({ ...paymentData, phoneNumber: e.target.value })}
               />
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all text-base sm:text-lg shadow-lg shadow-green-100">
+            <button type="submit" className="w-full bg-[#0a2540] hover:bg-[#112d4e] text-white py-3.5 sm:py-4 rounded-xl font-semibold transition-all text-base sm:text-lg shadow-lg">
               Pay Now
             </button>
           </form>
         </ModalOverlay>
       )}
 
-      {/* Success Modal */}
       {showSuccess && (
         <ModalOverlay onClose={() => setShowSuccess(false)} size="large">
           <div className="text-center">
-            <div className="bg-green-100 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6">
-              <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-green-600" />
+            <div className="bg-emerald-50 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6 ring-1 ring-emerald-100">
+              <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Payment Successful!</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">Your KRA request has been received.</p>
-            <div className="bg-gray-50 rounded-xl p-4 mt-4 border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tracking Number</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Payment Successful!</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-2">Your KRA request has been received.</p>
+            <div className="bg-slate-50 rounded-2xl p-4 mt-6 border border-slate-200">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tracking Number</p>
               <p className="text-xl sm:text-2xl font-bold text-blue-600 tracking-wider font-mono">{trackingNumber}</p>
             </div>
-            <button onClick={() => setShowSuccess(false)} className="w-full mt-4 bg-gray-100 text-gray-700 py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-gray-200 transition-all text-base sm:text-lg">
+            <button onClick={() => setShowSuccess(false)} className="w-full mt-6 bg-white border border-slate-300 text-slate-700 py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all text-base sm:text-lg">
               Close
             </button>
           </div>
         </ModalOverlay>
       )}
 
-      {/* Track Request Modal */}
       {showCheckStatus && (
         <ModalOverlay onClose={() => setShowCheckStatus(false)} size="large">
           <div className="text-center mb-6 sm:mb-8">
-            <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5">
-              <Search className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+            <div className="bg-indigo-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5 ring-1 ring-indigo-100">
+              <Search className="h-7 w-7 sm:h-8 sm:w-8 text-indigo-600" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Track KRA Request</h2>
-            <p className="text-sm sm:text-base text-gray-500 mt-2">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Track KRA Request</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-2">
               Enter your Reference Number or M-Pesa Receipt
             </p>
           </div>
           <form onSubmit={(e) => { e.preventDefault(); handleTrackRequest() }} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Reference Number or M-Pesa Receipt</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Reference Number or M-Pesa Receipt</label>
               <input
                 type="text"
                 required
-                className="w-full px-4 py-3.5 rounded-xl border border-gray-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-base"
+                className="w-full px-4 py-3.5 rounded-xl border border-slate-300 focus:border-[#0a2540] focus:ring-2 focus:ring-[#0a2540]/20 outline-none transition-all text-base"
                 placeholder="e.g. CLA-2026-000154 or TGH5KD9L1M"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
@@ -1904,7 +2245,7 @@ const freeTools = [
             <button
               type="submit"
               disabled={isSearching}
-              className="w-full bg-gradient-to-r from-purple-600 to-purple-700 text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:from-purple-700 hover:to-purple-800 transition-all text-base sm:text-lg shadow-lg shadow-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#0a2540] hover:bg-[#112d4e] text-white py-3.5 sm:py-4 rounded-xl font-semibold transition-all text-base sm:text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSearching ? 'Searching...' : 'Track Request'}
             </button>
@@ -1912,698 +2253,79 @@ const freeTools = [
         </ModalOverlay>
       )}
 
-      {/* Order Result Modal */}
       {showOrderResult && (
         <ModalOverlay onClose={() => { setShowOrderResult(false); setOrderStatus('') }} size="large">
           <div className="text-center">
             <div className={`rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6 ${
-              orderStatus === 'Ready for Download' ? 'bg-green-100' : 'bg-amber-100'
+              orderStatus === 'Ready for Download' ? 'bg-emerald-50 ring-1 ring-emerald-100' : 'bg-amber-50 ring-1 ring-amber-100'
             }`}>
               {orderStatus === 'Ready for Download'
-                ? <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-green-600" />
-                : <Clock className="h-10 w-10 sm:h-12 sm:w-12 text-amber-600" />}
+                ? <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500" />
+                : <Clock className="h-10 w-10 sm:h-12 sm:w-12 text-amber-500" />}
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Order Status</h2>
-            <div className={`mt-3 inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${
-              orderStatus === 'Ready for Download' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Order Status</h2>
+            <div className={`mt-3 inline-block px-4 py-1.5 rounded-full text-sm font-bold ${
+              orderStatus === 'Ready for Download' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
             }`}>
               {orderStatus || 'Processing'}
             </div>
-            <p className="text-sm sm:text-base text-gray-500 mt-4">
-              Tracking Number: <span className="font-mono font-semibold text-gray-900">{trackingNumber}</span>
+            <p className="text-sm sm:text-base text-slate-500 mt-4">
+              Tracking Number: <span className="font-mono font-semibold text-slate-900">{trackingNumber}</span>
             </p>
             {isCounting && !isReady && (
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4">
                 <div className="flex items-center justify-center gap-2">
-                  <Timer className="h-5 w-5 text-blue-600 animate-pulse" />
-                  <span className="text-sm text-gray-700">
+                  <Timer className="h-5 w-5 text-blue-500 animate-pulse" />
+                  <span className="text-sm text-slate-700 font-medium">
                     Time remaining: <span className="font-bold text-blue-600">{formatTime(countdown)}</span>
                   </span>
                 </div>
               </div>
             )}
             {orderStatus === 'Ready for Download' && (
-              <button onClick={handleDownload} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-3 text-base sm:text-lg shadow-lg shadow-blue-100">
+              <button onClick={handleDownload} className="w-full mt-6 bg-[#0a2540] hover:bg-[#112d4e] text-white py-3.5 sm:py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3 text-base sm:text-lg shadow-lg">
                 <Download className="h-5 w-5 sm:h-6 sm:w-6" />
                 Download Certificate
               </button>
             )}
-            <button onClick={() => { setShowOrderResult(false); setOrderStatus('') }} className="w-full mt-3 bg-gray-100 text-gray-700 py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-gray-200 transition-all text-base sm:text-lg">
+            <button onClick={() => { setShowOrderResult(false); setOrderStatus('') }} className="w-full mt-3 bg-white border border-slate-300 text-slate-700 py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all text-base sm:text-lg">
               Close
             </button>
           </div>
         </ModalOverlay>
       )}
-    </div>
-  )
-}
 
-// ─── Logo mark (two slanted bars) ─────────────────────────────
-function LogoMark({ className, gradientId }: { className?: string, gradientId: string }) {
-  return (
-    <svg className={className} viewBox="0 0 44 32" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="32" x2="44" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#3b82f6" />
-          <stop offset="1" stopColor="#8b5cf6" />
-        </linearGradient>
-      </defs>
-      <path d="M16 2 H42 L30 15 H4 Z" fill={`url(#${gradientId})`} />
-      <path d="M14 18 H30 L24 30 H4 Z" fill={`url(#${gradientId})`} opacity="0.9" />
-    </svg>
-  )
-}
-
-// ─── Workflow card data ───────────────────────────────────────
-type RailView = 'flow' | 'runs' | 'data' | 'apps' | 'api' | 'rules' | 'templates'
-
-type FlowNode = {
-  title: string
-  subtitle: string
-  status: string
-  tone: 'ok' | 'review'
-  time: string
-  icon: LucideIcon
-}
-
-type Flow = {
-  id: string
-  tab: string
-  name: string
-  tasks: number
-  lastRun: string
-  runBase: number
-  data: [string, string][]
-  nodes: FlowNode[]
-}
-
-const FONT_STACK = "'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif"
-const FONT_URL = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
-
-const FLOW_CSS = `
-@keyframes tf-dash { to { stroke-dashoffset: -20; } }
-@keyframes tf-glow {
-  0% { box-shadow: 0 0 0 0 rgba(59,78,240,0.35); }
-  70% { box-shadow: 0 0 0 12px rgba(59,78,240,0); }
-  100% { box-shadow: 0 0 0 0 rgba(59,78,240,0); }
-}
-.tf-dash { stroke-dasharray: 6 4; animation: tf-dash 0.7s linear infinite; }
-.tf-glow { animation: tf-glow 1.4s ease-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .tf-dash, .tf-glow { animation: none; }
-}
-`
-
-const RAIL: { id: RailView; label: string; icon: LucideIcon }[] = [
-  { id: 'flow', label: 'Workflow', icon: Network },
-  { id: 'runs', label: 'Run history', icon: WorkflowIcon },
-  { id: 'data', label: 'Extracted data', icon: Database },
-  { id: 'apps', label: 'Integrations', icon: Link2 },
-  { id: 'api', label: 'API', icon: Code },
-  { id: 'rules', label: 'Rules', icon: Settings },
-  { id: 'templates', label: 'Templates', icon: LayoutGrid },
-]
-
-// Node geometry inside the 760 × 610 canvas
-const NODE_W = 244
-const NODE_H = 118
-const NODE_POS = [
-  { left: 24, top: 32 },
-  { left: 24, top: 212 },
-  { left: 316, top: 212 },
-  { left: 128, top: 448 },
-  { left: 438, top: 448 },
-]
-const STAGE_OF = [0, 1, 2, 3, 3]
-const FINAL_TICK = 4
-
-const NODE_ICON_BG = [
-  'bg-gradient-to-br from-[#6d4cf5] to-[#8b5cf6]',
-  'bg-gradient-to-br from-[#3b82f6] to-[#4f6ef7]',
-  'bg-gradient-to-br from-[#10b981] to-[#22c55e]',
-  'bg-gradient-to-br from-[#7c3aed] to-[#8b5cf6]',
-  'bg-gradient-to-br from-[#3b82f6] to-[#5b8df8]',
-]
-
-const TONE_STYLE = {
-  ok: 'bg-emerald-100 text-emerald-700',
-  review: 'bg-orange-100 text-orange-600',
-}
-
-const BLUE = '#3b4ef0'
-const VIOLET = '#7c3aed'
-const IDLE = '#cbd5e1'
-
-const SEGMENTS = [
-  { d: 'M146 158 V204', target: 0 + 1, color: BLUE, from: [146, 158], to: [146, 204] },
-  { d: 'M276 271 H308', target: 2, color: BLUE, from: [276, 271], to: [308, 271] },
-  { d: 'M438 338 V374 Q438 390 422 390 H266 Q250 390 250 406 V440', target: 3, color: BLUE, from: [438, 338], to: [250, 440] },
-  { d: 'M438 338 V374 Q438 390 454 390 H544 Q560 390 560 406 V440', target: 4, color: VIOLET, from: [438, 338], to: [560, 440] },
-]
-
-const FLOWS: Flow[] = [
-  {
-    id: 'tot',
-    tab: 'TOT',
-    name: 'Turnover Tax (TOT)',
-    tasks: 12,
-    lastRun: '2 min ago',
-    runBase: 1048,
-    data: [['Period', 'Sep 2026'], ['Invoices parsed', '38'], ['Gross sales', 'KES 1,240,000'], ['Return', 'Ready to file']],
-    nodes: [
-      { title: 'Invoice received', subtitle: 'Webhook • API', status: 'Automated', tone: 'ok', time: '2 mins ago', icon: Zap },
-      { title: 'Extract tax data', subtitle: 'Parse • Transform', status: 'Needs review', tone: 'review', time: '3 mins ago', icon: FileText },
-      { title: 'Validate details', subtitle: 'Rules • KRA checks', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: Check },
-      { title: 'Prepare return', subtitle: 'Generate • Format', status: 'Completed', tone: 'ok', time: '1 min ago', icon: FileText },
-      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Send },
-    ],
-  },
-  {
-    id: 'nil',
-    tab: 'Nil return',
-    name: 'Nil return filing',
-    tasks: 8,
-    lastRun: '4 min ago',
-    runBase: 612,
-    data: [['Period', 'Sep 2026'], ['Income declared', 'None'], ['Obligation', 'Income tax'], ['Return', 'Filed']],
-    nodes: [
-      { title: 'Nil request', subtitle: 'Form • API', status: 'Automated', tone: 'ok', time: '4 mins ago', icon: Zap },
-      { title: 'Check period', subtitle: 'Filing • Obligations', status: 'Completed', tone: 'ok', time: '4 mins ago', icon: FileSearch },
-      { title: 'Confirm nil', subtitle: 'Rules • KRA checks', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: Check },
-      { title: 'File return', subtitle: 'Submit • Confirm', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: FileText },
-      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: Send },
-    ],
-  },
-  {
-    id: 'tcc',
-    tab: 'TCC',
-    name: 'Tax compliance certificate',
-    tasks: 9,
-    lastRun: '3 min ago',
-    runBase: 327,
-    data: [['Returns checked', '12 months'], ['Late filings', '0'], ['Open balances', 'None'], ['Certificate', 'Issued']],
-    nodes: [
-      { title: 'TCC request', subtitle: 'Form • API', status: 'Automated', tone: 'ok', time: '5 mins ago', icon: Zap },
-      { title: 'Check filings', subtitle: 'Returns • Payments', status: 'Needs review', tone: 'review', time: '4 mins ago', icon: FileSearch },
-      { title: 'Validate status', subtitle: 'Rules • KRA checks', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: Check },
-      { title: 'Issue certificate', subtitle: 'Generate • Format', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: FileText },
-      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Send },
-    ],
-  },
-  {
-    id: 'pin',
-    tab: 'KRA PIN',
-    name: 'KRA PIN verification',
-    tasks: 15,
-    lastRun: '1 min ago',
-    runBase: 2210,
-    data: [['ID type', 'Kenyan Citizen'], ['ID number', '3****678'], ['KRA PIN', 'A00*****Z'], ['Match', 'Verified']],
-    nodes: [
-      { title: 'PIN submitted', subtitle: 'Form • API', status: 'Automated', tone: 'ok', time: '2 mins ago', icon: Zap },
-      { title: 'Fetch taxpayer', subtitle: 'Lookup • KRA', status: 'Completed', tone: 'ok', time: '2 mins ago', icon: Search },
-      { title: 'Match details', subtitle: 'Name • ID', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Check },
-      { title: 'Build result', subtitle: 'Mask • Format', status: 'Completed', tone: 'ok', time: '1 min ago', icon: FileText },
-      { title: 'Send notification', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '1 min ago', icon: Send },
-    ],
-  },
-  {
-    id: 'supplier',
-    tab: 'Supplier',
-    name: 'Supplier compliance verification',
-    tasks: 11,
-    lastRun: '5 min ago',
-    runBase: 144,
-    data: [['Suppliers checked', '24'], ['PIN valid', '22'], ['TCC valid', '20'], ['Flagged', '2']],
-    nodes: [
-      { title: 'Supplier added', subtitle: 'Upload • API', status: 'Automated', tone: 'ok', time: '6 mins ago', icon: Zap },
-      { title: 'Verify PIN', subtitle: 'Lookup • KRA', status: 'Needs review', tone: 'review', time: '5 mins ago', icon: Search },
-      { title: 'Check TCC status', subtitle: 'Validity • Expiry', status: 'Completed', tone: 'ok', time: '4 mins ago', icon: Check },
-      { title: 'Build report', subtitle: 'Generate • Format', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: FileText },
-      { title: 'Send alert', subtitle: 'Email • SMS', status: 'Completed', tone: 'ok', time: '3 mins ago', icon: Send },
-    ],
-  },
-]
-
-const INTEGRATIONS = [
-  { id: 'webhook', name: 'Webhook', desc: 'Receive invoices and events' },
-  { id: 'email', name: 'Email', desc: 'Send notifications' },
-  { id: 'sms', name: 'SMS', desc: 'Send text alerts' },
-  { id: 'kra', name: 'KRA checks', desc: 'Validate PINs and returns' },
-  { id: 'mpesa', name: 'M-Pesa', desc: 'Collect payments' },
-]
-
-const RULES = [
-  { id: 'autoValidate', name: 'Validate automatically', desc: 'Run KRA checks on every request' },
-  { id: 'humanReview', name: 'Hold unclear data for review', desc: 'Pause the run until someone confirms' },
-  { id: 'notifyEmail', name: 'Email on completion', desc: 'Send an email when a run finishes' },
-  { id: 'notifySms', name: 'SMS on completion', desc: 'Send a text when a run finishes' },
-]
-
-// ─── Workflow card ────────────────────────────────────────────
-function WorkflowCard() {
-  const [flowId, setFlowId] = useState(FLOWS[0].id)
-  const [view, setView] = useState<RailView>('flow')
-  const [toggles, setToggles] = useState<Record<string, boolean>>({
-    webhook: true, email: true, sms: true, kra: true, mpesa: false,
-    autoValidate: true, humanReview: true, notifyEmail: true, notifySms: false,
-  })
-  const flow = FLOWS.find((f) => f.id === flowId) ?? FLOWS[0]
-
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(1)
-
-  useEffect(() => {
-    const el = panelRef.current
-    if (!el) return
-    const update = () => setScale(Math.min(1, el.clientWidth / CANVAS_W))
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  const canvasHeight = CANVAS_H * scale
-  const panelHeight = view === 'flow' ? canvasHeight : Math.max(canvasHeight, 420)
-  const toggle = (id: string) => setToggles((t) => ({ ...t, [id]: !t[id] }))
-
-  return (
-    <div
-      className="relative bg-white rounded-2xl border border-[#e3e9f6] shadow-[0_24px_60px_-20px_rgba(40,60,160,0.22)] overflow-hidden"
-      style={{ fontFamily: FONT_STACK }}
-    >
-      <link rel="stylesheet" href={FONT_URL} />
-      <style dangerouslySetInnerHTML={{ __html: FLOW_CSS }} />
-
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 sm:px-5 py-2.5 2xl:py-0 2xl:h-[52px] border-b border-slate-100">
-        <div className="order-1 flex items-center gap-2">
-          <LogoMark className="w-7 h-5" gradientId="logo-card" />
-          <span className="text-[18px] font-extrabold text-[#0b1140] tracking-tight whitespace-nowrap">
-            Taxflow <span className="text-[#2f6bf0]">Africa</span>
-          </span>
-        </div>
-
-        <div
-          role="tablist"
-          aria-label="Workflow examples"
-          className="order-3 w-full 2xl:order-2 2xl:w-auto min-w-0 flex items-center gap-1 rounded-lg bg-slate-100 p-1 overflow-x-auto"
-        >
-          {FLOWS.map((f) => {
-            const active = f.id === flow.id
-            return (
-              <button
-                key={f.id}
-                role="tab"
-                aria-selected={active}
-                title={f.name}
-                onClick={() => setFlowId(f.id)}
-                className={`px-3.5 h-8 rounded-md text-[13px] font-semibold whitespace-nowrap transition-colors ${
-                  active ? 'bg-white text-[#2f5bf0] shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {f.tab}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="order-2 2xl:order-3 flex items-center gap-4">
-          <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            Live
-          </span>
-          <button className="inline-flex items-center gap-2 px-4 h-[34px] rounded-lg bg-slate-100 text-[#1e2a4a] text-sm font-semibold">
-            <Save className="w-4 h-4" />
-            Save
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row">
-        <nav
-          aria-label="Workflow panels"
-          className="flex flex-row sm:flex-col items-center gap-2 sm:w-[60px] flex-shrink-0 px-3 py-2 sm:px-0 sm:pt-3 sm:pb-0 overflow-x-auto border-b sm:border-b-0 sm:border-r border-slate-100 bg-white"
-        >
-          {RAIL.map((item) => {
-            const Icon = item.icon
-            const active = item.id === view
-            return (
-              <button
-                key={item.id}
-                onClick={() => setView(item.id)}
-                title={item.label}
-                aria-label={item.label}
-                aria-pressed={active}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
-                  active ? 'bg-[#e4ecff] text-[#2f5bf0]' : 'text-[#5d6a8a] hover:bg-slate-100 hover:text-[#2f5bf0]'
-                }`}
-              >
-                <Icon className="w-[18px] h-[18px]" />
-              </button>
-            )
-          })}
-        </nav>
-
-        <div
-          ref={panelRef}
-          className="relative flex-1 min-w-0 overflow-hidden bg-white"
-          style={{
-            height: panelHeight,
-            backgroundImage: 'radial-gradient(circle at 1px 1px, rgb(203 213 225 / 0.55) 1px, transparent 0)',
-            backgroundSize: '20px 20px',
-          }}
-        >
-          {view === 'flow' && <FlowCanvas flow={flow} scale={scale} />}
-          {view === 'runs' && <RunsView flow={flow} />}
-          {view === 'data' && <DataView flow={flow} />}
-          {view === 'apps' && <ToggleView title="Integrations" subtitle="Connect the systems this workflow talks to" items={INTEGRATIONS} toggles={toggles} onToggle={toggle} />}
-          {view === 'api' && <ApiView flow={flow} />}
-          {view === 'rules' && <ToggleView title="Rules" subtitle="Decide how each run behaves" items={RULES} toggles={toggles} onToggle={toggle} />}
-          {view === 'templates' && (
-            <TemplatesView
-              activeId={flow.id}
-              onPick={(id) => { setFlowId(id); setView('flow') }}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function FlowCanvas({ flow, scale }: { flow: Flow; scale: number }) {
-  const [tick, setTick] = useState(0)
-  const [reduced, setReduced] = useState(false)
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setReduced(mq.matches)
-    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-
-  useEffect(() => {
-    setTick(reduced ? FINAL_TICK : 0)
-  }, [flow.id, reduced])
-
-  useEffect(() => {
-    if (reduced) return
-    const delay = tick === FINAL_TICK ? 2800 : 1400
-    const t = setTimeout(() => setTick(tick === FINAL_TICK ? 0 : tick + 1), delay)
-    return () => clearTimeout(t)
-  }, [tick, reduced])
-
-  const stateOf = (stage: number): 'pending' | 'active' | 'done' =>
-    tick > stage ? 'done' : tick === stage ? 'active' : 'pending'
-
-  const doneCount = STAGE_OF.filter((st) => tick > st).length
-  const finished = tick === FINAL_TICK
-  const tasks = flow.tasks - flow.nodes.length + doneCount
-
-  return (
-    <div className="relative" style={{ height: CANVAS_H * scale }}>
-      <div
-        className="absolute left-0 top-0"
-        style={{ width: CANVAS_W, height: CANVAS_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}
-      >
-        <svg className="absolute inset-0 pointer-events-none" width={CANVAS_W} height={CANVAS_H} viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} fill="none">
-          {SEGMENTS.map((seg, i) => {
-            const st = stateOf(STAGE_OF[seg.target])
-            const color = st === 'pending' ? IDLE : seg.color
-            return (
-              <g key={i}>
-                <path
-                  d={seg.d}
-                  stroke={color}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  className={st === 'active' ? 'tf-dash' : undefined}
-                />
-                {[seg.from, seg.to].map(([cx, cy], k) => (
-                  <g key={k}>
-                    <circle cx={cx} cy={cy} r="6" fill={color} fillOpacity={st === 'pending' ? 0 : 0.15} />
-                    <circle cx={cx} cy={cy} r="3.5" fill={color} />
-                  </g>
-                ))}
-              </g>
-            )
-          })}
-        </svg>
-
-        {flow.nodes.map((node, i) => {
-          const Icon = node.icon
-          const st = stateOf(STAGE_OF[i])
-          const status =
-            st === 'done' ? node.status : st === 'active' ? 'Running' : 'Queued'
-          const statusStyle =
-            st === 'done' ? TONE_STYLE[node.tone] : st === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
-          const time = st === 'done' ? node.time : st === 'active' ? 'In progress' : 'Waiting'
-          return (
-            <NodeCard
-              key={`${flow.id}-${i}`}
-              pos={NODE_POS[i]}
-              state={st}
-              icon={<Icon className="w-[22px] h-[22px] text-white" strokeWidth={i === 2 ? 3 : 2} />}
-              iconBg={NODE_ICON_BG[i]}
-              title={node.title}
-              subtitle={node.subtitle}
-              status={status}
-              statusStyle={statusStyle}
-              time={time}
-            />
-          )
-        })}
-
-        <div
-          className="absolute rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
-          style={{ left: 524, top: 28, width: 212, height: 140 }}
-        >
-          <div className="flex items-center gap-2.5 px-4 h-[46px] bg-slate-50/70 border-b border-slate-100">
-            <Activity className="w-5 h-5 text-[#3b4ef0]" />
-            <span className="text-[15px] font-semibold text-[#0b1140]">Workflow activity</span>
-          </div>
-          <div className="px-4 pt-3.5 space-y-3.5">
-            <div className="flex items-center gap-2.5 text-[14px] text-slate-700">
-              <span className="w-[22px] h-[22px] rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                <Check className="w-3.5 h-3.5 text-white" strokeWidth={3.5} />
-              </span>
-              <span><span className="font-bold text-[#0b1140]">{tasks}</span> tasks completed</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-[14px] text-slate-600">
-              <Clock className="w-[22px] h-[22px] text-slate-400 flex-shrink-0" />
-              <span>{finished ? `Last run ${flow.lastRun}` : 'Running now…'}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function NodeCard({
-  pos, state, icon, iconBg, title, subtitle, status, statusStyle, time,
-}: {
-  pos: { left: number; top: number }
-  state: 'pending' | 'active' | 'done'
-  icon: React.ReactNode
-  iconBg: string
-  title: string
-  subtitle: string
-  status: string
-  statusStyle: string
-  time: string
-}) {
-  return (
-    <div
-      className={`absolute rounded-xl border bg-white px-4 py-3 transition-all duration-500 ${
-        state === 'active'
-          ? 'border-[#3b4ef0] tf-glow'
-          : 'border-[#e6ebf5] shadow-[0_4px_14px_-4px_rgba(40,60,160,0.12)]'
-      } ${state === 'pending' ? 'opacity-55' : 'opacity-100'}`}
-      style={{ left: pos.left, top: pos.top, width: NODE_W, height: NODE_H }}
-    >
-      <div className="flex items-start gap-3.5">
-        <div className={`w-11 h-11 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold text-[#0b1140] leading-5 truncate">{title}</p>
-          <p className="text-[13px] text-slate-500 leading-4 mt-0.5 truncate">{subtitle}</p>
-          <span className={`inline-flex items-center gap-1.5 mt-2 text-[12px] font-semibold px-2.5 h-6 rounded-md ${statusStyle}`}>
-            {state === 'active' && (
-              <span className="w-3 h-3 rounded-full border-2 border-blue-300 border-t-blue-700 animate-spin" />
-            )}
-            {status}
-          </span>
-          <p className="flex items-center gap-1.5 text-[12px] text-slate-500 mt-1.5 leading-4">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
-            {time}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PanelShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <div className="h-full overflow-y-auto p-5">
-      <div className="mb-4">
-        <h3 className="text-[17px] font-bold text-[#0b1140] leading-tight">{title}</h3>
-        <p className="text-[13px] text-slate-500 mt-1">{subtitle}</p>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function RunsView({ flow }: { flow: Flow }) {
-  const runs = [
-    { status: 'Completed', tone: 'ok', dur: '1m 12s', when: flow.lastRun },
-    { status: 'Completed', tone: 'ok', dur: '58s', when: '1 hr ago' },
-    { status: 'Needs review', tone: 'review', dur: '2m 04s', when: '3 hrs ago' },
-    { status: 'Completed', tone: 'ok', dur: '1m 31s', when: 'Yesterday' },
-    { status: 'Completed', tone: 'ok', dur: '1m 05s', when: 'Yesterday' },
-  ] as const
-  return (
-    <PanelShell title="Run history" subtitle={flow.name}>
-      <ul className="space-y-2.5">
-        {runs.map((r, n) => (
-          <li key={n} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <span className="font-mono text-[13px] text-slate-500 w-14">#{flow.runBase - n}</span>
-            <span className={`inline-flex items-center h-6 px-2.5 rounded-md text-[12px] font-semibold ${TONE_STYLE[r.tone]}`}>
-              {r.status}
-            </span>
-            <span className="ml-auto text-[13px] text-slate-500">{r.dur}</span>
-            <span className="w-24 text-right text-[13px] text-slate-400">{r.when}</span>
-          </li>
-        ))}
-      </ul>
-    </PanelShell>
-  )
-}
-
-function DataView({ flow }: { flow: Flow }) {
-  return (
-    <PanelShell title="Extracted data" subtitle={`${flow.name} · sample values`}>
-      <dl className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
-        {flow.data.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between px-4 py-3.5">
-            <dt className="text-[14px] text-slate-500">{label}</dt>
-            <dd className="text-[14px] font-semibold text-[#0b1140]">{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </PanelShell>
-  )
-}
-
-function Switch({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onChange}
-      className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors ${checked ? 'bg-[#2f5bf0]' : 'bg-slate-300'}`}
-    >
-      <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        }`}
+      {/* 4. ADD THE PRICING MODAL AT THE BOTTOM */}
+      <PricingModal 
+        isOpen={showPricingModal} 
+        onClose={() => setShowPricingModal(false)} 
+        onStartFree={() => {
+          setShowFindPINForm(true)
+        }} 
       />
-    </button>
+    </div>
   )
 }
 
-function ToggleView({
-  title, subtitle, items, toggles, onToggle,
-}: {
-  title: string
-  subtitle: string
-  items: { id: string; name: string; desc: string }[]
-  toggles: Record<string, boolean>
-  onToggle: (id: string) => void
-}) {
-  return (
-    <PanelShell title={title} subtitle={subtitle}>
-      <ul className="space-y-2.5">
-        {items.map((item) => (
-          <li key={item.id} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-semibold text-[#0b1140]">{item.name}</p>
-              <p className="text-[13px] text-slate-500 mt-0.5">{item.desc}</p>
-            </div>
-            <Switch checked={!!toggles[item.id]} onChange={() => onToggle(item.id)} label={item.name} />
-          </li>
-        ))}
-      </ul>
-    </PanelShell>
-  )
-}
-
-function ApiView({ flow }: { flow: Flow }) {
-  const code = `POST /v1/workflows/${flow.id}/runs
-Content-Type: application/json
-
-{
-  "source": "webhook",
-  "payload": { "taxpayer_id": "A00*****Z" }
-}
-
-// Response
-{ "run": "#${flow.runBase + 1}", "status": "running" }`
-  return (
-    <PanelShell title="API" subtitle="Example request to start this workflow">
-      <pre className="rounded-xl bg-[#0f172a] text-slate-100 text-[12.5px] leading-6 p-4 overflow-x-auto font-mono">
-        <code>{code}</code>
-      </pre>
-    </PanelShell>
-  )
-}
-
-function TemplatesView({ activeId, onPick }: { activeId: string; onPick: (id: string) => void }) {
-  return (
-    <PanelShell title="Templates" subtitle="Pick a workflow to open it on the canvas">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        {FLOWS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => onPick(f.id)}
-            className={`text-left rounded-xl border px-4 py-3.5 transition-colors ${
-              f.id === activeId ? 'border-[#3b4ef0] bg-[#f3f6ff]' : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}
-          >
-            <p className="text-[14px] font-semibold text-[#0b1140]">{f.name}</p>
-            <p className="text-[13px] text-slate-500 mt-0.5">{f.nodes.length} steps</p>
-          </button>
-        ))}
-      </div>
-    </PanelShell>
-  )
-}
-
+// Reusable Modal
 function ModalOverlay({ children, onClose, size = 'default' }: {
   children: React.ReactNode
   onClose: () => void
   size?: 'default' | 'large' | 'compact'
 }) {
   const maxWidth =
-    size === 'large' ? 'max-w-lg sm:max-w-2xl' :
+    size === 'large' ? 'max-w-lg sm:max-w-xl' :
     size === 'compact' ? 'max-w-sm sm:max-w-md' :
     'max-w-sm sm:max-w-md'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full ${maxWidth} p-4 sm:p-6 md:p-7 border border-gray-100 overflow-y-auto max-h-[90vh]`}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className={`relative bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl w-full ${maxWidth} p-5 sm:p-7 md:p-8 border border-slate-100 overflow-y-auto max-h-[90vh] transform transition-all`}>
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl p-2 transition-all z-10"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-full p-2 transition-all z-10"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
         {children}
       </div>
