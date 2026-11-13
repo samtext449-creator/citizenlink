@@ -28,7 +28,8 @@ import {
   UserCheck,
   Receipt,
   ChevronDown,
-  Award
+  Award,
+  ShieldAlert
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -74,6 +75,15 @@ interface Obligation {
   id: string
   name: string
   type: string
+}
+
+interface ExemptionResult {
+  response_message: string
+  response_code: string
+  cert_no?: string
+  cert_expiry_date?: string
+  cert_eff_date?: string
+  cert_issue_date?: string | number
 }
 
 type ReprintFlowState = 'idle' | 'processing' | 'pending' | 'success' | 'error'
@@ -135,21 +145,31 @@ export default function CitizenLinkAfrica() {
   const [certResult, setCertResult] = useState<any>(null)
   const [certError, setCertError] = useState('')
 
+  // Tax Exemption Status
+  const [showExemptionForm, setShowExemptionForm] = useState(false)
+  const [exemptionPin, setExemptionPin] = useState('')
+  const [isFetchingExemption, setIsFetchingExemption] = useState(false)
+  const [exemptionResult, setExemptionResult] = useState<ExemptionResult | null>(null)
+  const [exemptionError, setExemptionError] = useState('')
+
   // ── Turnstile State & Refs ──
   const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
   const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string | null>(null)
   const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
   const [certTurnstileToken, setCertTurnstileToken] = useState<string | null>(null)
+  const [exemptionTurnstileToken, setExemptionTurnstileToken] = useState<string | null>(null)
   
   const pinTurnstileTokenRef = useRef<string | null>(null)
   const verifyTurnstileTokenRef = useRef<string | null>(null)
   const obligationsTurnstileTokenRef = useRef<string | null>(null)
   const certTurnstileTokenRef = useRef<string | null>(null)
+  const exemptionTurnstileTokenRef = useRef<string | null>(null)
   
   const pinTurnstileRef = useRef<any>(null)
   const verifyTurnstileRef = useRef<any>(null)
   const obligationsTurnstileRef = useRef<any>(null)
   const certTurnstileRef = useRef<any>(null)
+  const exemptionTurnstileRef = useRef<any>(null)
 
   // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
   const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
@@ -562,6 +582,81 @@ export default function CitizenLinkAfrica() {
     certTurnstileTokenRef.current = null
   }
 
+  // ── Handlers for Tax Exemption ──
+  const handleExemptionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanPin = exemptionPin.trim().toUpperCase()
+    
+    if (!cleanPin || cleanPin.length < 10) {
+      setExemptionError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    const token = exemptionTurnstileTokenRef.current
+
+    if (!token) {
+      setExemptionError('Please complete the security check.')
+      return
+    }
+
+    setIsFetchingExemption(true)
+    setExemptionError('')
+    setExemptionResult(null)
+
+    try {
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/itexemption/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          pin: cleanPin,
+          turnstileToken: token
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.success) {
+        // If KRA returns 900 error code, it means no valid exemption
+        if (data?.error?.code === '900' || data?.data?.response_code === '900') {
+           setExemptionResult({
+             response_code: '900',
+             response_message: 'No valid exemption certificate found.'
+           })
+           return
+        }
+        setExemptionError(getKraErrorMessage(data, res.status))
+        return
+      }
+
+      // If KRA returns 200 success
+      setExemptionResult({
+        response_code: data.data.response_code,
+        response_message: data.data.response_message,
+        cert_no: data.data.cert_no,
+        cert_expiry_date: data.data.cert_expiry_date,
+        cert_eff_date: data.data.cert_eff_date,
+        cert_issue_date: data.data.cert_issue_date
+      })
+    } catch (err) {
+      console.error('[KRA EXEMPTION] error', err)
+      setExemptionError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsFetchingExemption(false)
+      exemptionTurnstileTokenRef.current = null
+      exemptionTurnstileRef.current?.reset()
+      setExemptionTurnstileToken(null)
+    }
+  }
+
+  const resetExemptionForm = () => {
+    setExemptionPin('')
+    setExemptionResult(null)
+    setExemptionError('')
+    setIsFetchingExemption(false)
+    setExemptionTurnstileToken(null)
+    exemptionTurnstileTokenRef.current = null
+  }
+
   const handlePinModeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setReprintOnlyError('')
@@ -790,10 +885,10 @@ export default function CitizenLinkAfrica() {
 
   const serviceCards = [
     { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', hover: 'hover:border-sky-400 hover:shadow-sky-100', onClick: () => setShowFindPINForm(true), isActive: true },
-    { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', hover: 'hover:border-violet-400 hover:shadow-violet-100', onClick: () => setShowVerifyForm(true), isActive: true },
+   { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', hover: 'hover:border-violet-400 hover:shadow-violet-100', onClick: () => setShowVerifyForm(true), isActive: true },
     { title: 'Check My Obligations', desc: 'View all your active tax obligations', tag: 'NEW', color: 'bg-emerald-50 border-emerald-200', hover: 'hover:border-emerald-400 hover:shadow-emerald-100', onClick: () => setShowObligationsForm(true), isActive: true },
     { title: 'Verify KRA Certificates and Licenses', desc: 'Verify Fake TCC and eTIMS Invoice', tag: 'NEW', color: 'bg-rose-50 border-rose-200', hover: 'hover:border-rose-400 hover:shadow-rose-100', onClick: () => setShowVerifyCertForm(true), isActive: true },
-    { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Tax Exemption Status', desc: 'Check if you are exempted from Income Tax', tag: 'NEW', color: 'bg-amber-50 border-amber-200', hover: 'hover:border-amber-400 hover:shadow-amber-100', onClick: () => setShowExemptionForm(true), isActive: true },
     { title: 'Rental Tax Returns', desc: 'Filing for rental income properties', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Rental Tax Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Verify Supplier', desc: 'Confirm supplier tax compliance status', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Verify Supplier'); setShowComingSoon(true) }, isActive: false },
     { title: 'Check My Tax Compliance', desc: 'View your overall tax compliance', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Check My Tax Compliance'); setShowComingSoon(true) }, isActive: false },
@@ -1473,6 +1568,151 @@ export default function CitizenLinkAfrica() {
 
               <button
                 onClick={resetObligationsForm}
+                className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                Check Another PIN
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-400">
+              Powered by <span className="font-semibold text-slate-500">Xeco Group</span>
+            </p>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ════════════ TAX EXEMPTION FORM ════════════ */}
+      {showExemptionForm && (
+        <ModalOverlay onClose={() => { setShowExemptionForm(false); resetExemptionForm() }} size="large">
+          <div className="text-center mb-6">
+            <div className="bg-amber-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 ring-1 ring-amber-100">
+              <ShieldAlert className="h-7 w-7 sm:h-8 sm:w-8 text-amber-600" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Tax Exemption Status</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-1">Check if you are exempted from paying Income Tax.</p>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-200/60">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
+              >
+                How we handle your data
+              </a>
+            </p>
+          </div>
+
+          {exemptionError && (
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{exemptionError}</p>
+            </div>
+          )}
+
+          {!exemptionResult ? (
+            <form className="space-y-4" onSubmit={handleExemptionSubmit}>
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  KRA PIN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={exemptionPin}
+                  onChange={(e) => setExemptionPin(e.target.value.toUpperCase())}
+                  placeholder="e.g. A020360004V"
+                  disabled={isFetchingExemption}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-slate-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div className="flex justify-start my-2">
+                <Turnstile
+                  ref={exemptionTurnstileRef}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => {
+                    exemptionTurnstileTokenRef.current = token
+                    setExemptionTurnstileToken(token)
+                    setExemptionError('')
+                  }}
+                  onExpire={() => {
+                    exemptionTurnstileTokenRef.current = null
+                    setExemptionTurnstileToken(null)
+                  }}
+                  options={{ theme: 'light' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isFetchingExemption || !exemptionTurnstileToken}
+                className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
+                  isFetchingExemption || !exemptionTurnstileToken
+                    ? 'bg-slate-300 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
+                }`}
+              >
+                {isFetchingExemption ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Checking Status...
+                  </>
+                ) : (
+                  <>Check Exemption Status<span className="text-lg leading-none">→</span></>
+                )}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className={`px-4 py-3 border-b flex items-center gap-2 ${
+                  (exemptionResult.response_code === '200' && exemptionResult.cert_no) 
+                    ? 'bg-emerald-50 border-emerald-100' 
+                    : 'bg-red-50 border-red-100'
+                }`}>
+                  {(exemptionResult.response_code === '200' && exemptionResult.cert_no)
+                    ? <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    : <AlertCircle className="w-4 h-4 text-red-600" />
+                  }
+                  <span className={`text-sm font-semibold ${
+                    (exemptionResult.response_code === '200' && exemptionResult.cert_no) 
+                      ? 'text-emerald-800' 
+                      : 'text-red-800'
+                  }`}>
+                    {(exemptionResult.response_code === '200' && exemptionResult.cert_no) 
+                      ? 'Valid Exemption Certificate Found' 
+                      : (exemptionResult.response_message || 'No Valid Exemption Certificate Found')}
+                  </span>
+                </div>
+                {exemptionResult.response_code === '200' && exemptionResult.cert_no && (
+                  <div className="p-4 space-y-3 text-sm">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                      <span className="text-slate-500">Certificate No</span>
+                      <span className="font-mono font-bold text-slate-900">{exemptionResult.cert_no}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                      <span className="text-slate-500">Effective Date</span>
+                      <span className="font-medium text-slate-900">{exemptionResult.cert_eff_date}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Expiry Date</span>
+                      <span className="font-medium text-slate-900">{exemptionResult.cert_expiry_date}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={resetExemptionForm}
                 className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 Check Another PIN
