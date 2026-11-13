@@ -27,7 +27,8 @@ import {
   Home,
   UserCheck,
   Receipt,
-  ChevronDown
+  ChevronDown,
+  Award
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -125,18 +126,30 @@ export default function CitizenLinkAfrica() {
   const [obligationsResult, setObligationsResult] = useState<Obligation[] | null>(null)
   const [obligationsError, setObligationsError] = useState('')
 
+  // Verify Certificate & Licenses
+  const [showVerifyCertForm, setShowVerifyCertForm] = useState(false)
+  const [certType, setCertType] = useState('tcc')
+  const [certNumber, setCertNumber] = useState('')
+  const [certPin, setCertPin] = useState('')
+  const [isVerifyingCert, setIsVerifyingCert] = useState(false)
+  const [certResult, setCertResult] = useState<any>(null)
+  const [certError, setCertError] = useState('')
+
   // ── Turnstile State & Refs ──
   const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
   const [verifyTurnstileToken, setVerifyTurnstileToken] = useState<string | null>(null)
   const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
+  const [certTurnstileToken, setCertTurnstileToken] = useState<string | null>(null)
   
   const pinTurnstileTokenRef = useRef<string | null>(null)
   const verifyTurnstileTokenRef = useRef<string | null>(null)
   const obligationsTurnstileTokenRef = useRef<string | null>(null)
+  const certTurnstileTokenRef = useRef<string | null>(null)
   
   const pinTurnstileRef = useRef<any>(null)
   const verifyTurnstileRef = useRef<any>(null)
   const obligationsTurnstileRef = useRef<any>(null)
+  const certTurnstileRef = useRef<any>(null)
 
   // ── Lookup mode: 'id' = fetch PIN (free), 'pin' = request cert (KES 25) ──
   const [lookupMode, setLookupMode] = useState<'id' | 'pin'>('id')
@@ -481,6 +494,74 @@ export default function CitizenLinkAfrica() {
     obligationsTurnstileTokenRef.current = null
   }
 
+  // ── Handlers for Verify Certificate ──
+  const handleVerifyCertSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanCertNo = certNumber.trim()
+    const cleanPin = certPin.trim().toUpperCase()
+    
+    if (!cleanCertNo) {
+      setCertError(`Please enter a valid ${certType === 'tcc' ? 'Certificate' : 'Invoice'} Number.`)
+      return
+    }
+    if (!cleanPin || cleanPin.length < 10) {
+      setCertError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
+      return
+    }
+
+    const token = certTurnstileTokenRef.current
+
+    if (!token) {
+      setCertError('Please complete the security check.')
+      return
+    }
+
+    setIsVerifyingCert(true)
+    setCertError('')
+    setCertResult(null)
+
+    try {
+      // Hitting the exact TCC endpoint your backend exposes
+      const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/tcc/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          type: certType,
+          tccNumber: cleanCertNo, // Matches your backend controller
+          kraPIN: cleanPin,       // Matches your backend controller
+          turnstileToken: token
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok || !data.success) {
+        setCertError(data?.error?.message || 'Verification failed. Document not found or invalid.')
+        return
+      }
+
+      setCertResult(data.data)
+    } catch (err) {
+      console.error('[KRA CERT VERIFY] error', err)
+      setCertError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsVerifyingCert(false)
+      certTurnstileTokenRef.current = null
+      certTurnstileRef.current?.reset()
+      setCertTurnstileToken(null)
+    }
+  }
+
+  const resetVerifyCertForm = () => {
+    setCertNumber('')
+    setCertPin('')
+    setCertResult(null)
+    setCertError('')
+    setIsVerifyingCert(false)
+    setCertTurnstileToken(null)
+    certTurnstileTokenRef.current = null
+  }
+
   const handlePinModeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setReprintOnlyError('')
@@ -711,7 +792,7 @@ export default function CitizenLinkAfrica() {
     { title: 'Find My KRA PIN', desc: 'Retrieve your KRA PIN instantly', tag: 'Free', color: 'bg-sky-50 border-sky-200', hover: 'hover:border-sky-400 hover:shadow-sky-100', onClick: () => setShowFindPINForm(true), isActive: true },
     { title: 'Verify KRA PIN', desc: 'Confirm a KRA PIN is valid', tag: 'NEW', color: 'bg-violet-50 border-violet-200', hover: 'hover:border-violet-400 hover:shadow-violet-100', onClick: () => setShowVerifyForm(true), isActive: true },
     { title: 'Check My Obligations', desc: 'View all your active tax obligations', tag: 'NEW', color: 'bg-emerald-50 border-emerald-200', hover: 'hover:border-emerald-400 hover:shadow-emerald-100', onClick: () => setShowObligationsForm(true), isActive: true },
-    { title: 'P9 / Employment Returns', desc: 'Annual P9/employment income filing', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('P9 / Employment Returns'); setShowComingSoon(true) }, isActive: false },
+    { title: 'Verify KRA Certificates and Licenses', desc: 'Verify Fake TCC and eTIMS Invoice', tag: 'NEW', color: 'bg-rose-50 border-rose-200', hover: 'hover:border-rose-400 hover:shadow-rose-100', onClick: () => setShowVerifyCertForm(true), isActive: true },
     { title: 'Turnover Tax (TOT) Returns', desc: 'TOT filing for small businesses', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Turnover Tax (TOT) Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Rental Tax Returns', desc: 'Filing for rental income properties', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Rental Tax Returns'); setShowComingSoon(true) }, isActive: false },
     { title: 'Verify Supplier', desc: 'Confirm supplier tax compliance status', color: 'bg-slate-100', onClick: () => { setComingSoonTitle('Verify Supplier'); setShowComingSoon(true) }, isActive: false },
@@ -1395,6 +1476,182 @@ export default function CitizenLinkAfrica() {
                 className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 Check Another PIN
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-400">
+              Powered by <span className="font-semibold text-slate-500">Xeco Group</span>
+            </p>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ════════════ VERIFY KRA CERTIFICATES AND LICENSES FORM (NEW) ════════════ */}
+      {showVerifyCertForm && (
+        <ModalOverlay onClose={() => { setShowVerifyCertForm(false); resetVerifyCertForm() }} size="large">
+          <div className="text-center mb-6">
+            <div className="bg-rose-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 ring-1 ring-rose-100">
+              <Award className="h-7 w-7 sm:h-8 sm:w-8 text-rose-600" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Verify Certificates & Licenses</h2>
+            <p className="text-sm sm:text-base text-slate-500 mt-1">Verify Tax Compliance Certificates (TCC) and eTIMS Invoices.</p>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-200/60">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Your data is processed in line with the Kenya Data Protection Act, 2019.{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0a2540] font-semibold underline underline-offset-2 hover:text-blue-600 transition-colors"
+              >
+                How we handle your data
+              </a>
+            </p>
+          </div>
+
+          {certError && (
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{certError}</p>
+            </div>
+          )}
+
+          {!certResult ? (
+            <form className="space-y-4" onSubmit={handleVerifyCertSubmit}>
+              
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  Certificate Category <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={certType}
+                    onChange={(e) => setCertType(e.target.value)}
+                    disabled={isVerifyingCert}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all cursor-pointer disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="tcc">Tax Compliance Certificate</option>
+                    <option value="etims">eTIMS Invoice</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  {certType === 'tcc' ? 'Certificate Number' : 'Invoice Number'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={certNumber}
+                  onChange={(e) => setCertNumber(e.target.value.toUpperCase())}
+                  placeholder={certType === 'tcc' ? 'Certificate. No.' : 'eTims Invoice No.'}
+                  disabled={isVerifyingCert}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-slate-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  KRA Pin Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={certPin}
+                  onChange={(e) => setCertPin(e.target.value.toUpperCase())}
+                  placeholder="KRA Pin. No."
+                  disabled={isVerifyingCert}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase disabled:bg-slate-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div className="flex justify-start my-2">
+                <Turnstile
+                  ref={certTurnstileRef}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => {
+                    certTurnstileTokenRef.current = token
+                    setCertTurnstileToken(token)
+                    setCertError('')
+                  }}
+                  onExpire={() => {
+                    certTurnstileTokenRef.current = null
+                    setCertTurnstileToken(null)
+                  }}
+                  options={{ theme: 'light' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isVerifyingCert || !certTurnstileToken}
+                className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
+                  isVerifyingCert || !certTurnstileToken
+                    ? 'bg-slate-300 text-white cursor-wait'
+                    : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
+                }`}
+              >
+                {isVerifyingCert ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verifying...
+                  </>
+                ) : (
+                  <>Verify {certType === 'tcc' ? 'Certificate' : 'Invoice'}<span className="text-lg leading-none">→</span></>
+                )}
+              </button>
+            </form>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-800">Verified Successfully</span>
+                </div>
+                <div className="p-4 space-y-3 text-sm">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">Taxpayer PIN</span>
+                    <span className="font-mono font-bold text-slate-900">{certResult.kraPIN}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">{certType === 'tcc' ? 'TCC Number' : 'Invoice Number'}</span>
+                    <span className="font-mono font-bold text-[#0a2540]">{certResult.tccNumber || certNumber}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">Status</span>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                      certResult.tccStatus === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {certResult.tccStatus}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">Issue Date</span>
+                    <span className="font-medium text-slate-900">{certResult.issueDate}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Expiry Date</span>
+                    <span className="font-medium text-slate-900">{certResult.expiryDate}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={resetVerifyCertForm}
+                className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                Verify Another Document
               </button>
             </div>
           )}
