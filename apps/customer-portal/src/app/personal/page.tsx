@@ -29,7 +29,9 @@ import {
   Receipt,
   ChevronDown,
   Award,
-  ShieldAlert
+  ShieldAlert,
+  Mail,
+  MessageCircle
 } from 'lucide-react'
 import { getKraErrorMessage } from '@/lib/krataxErrors'
 
@@ -186,6 +188,10 @@ export default function CitizenLinkAfrica() {
   const [reprintOnlyEmail, setReprintOnlyEmail] = useState('')
   const [reprintOnlyPaymentNo, setReprintOnlyPaymentNo] = useState('')
   const [reprintOnlyError, setReprintOnlyError] = useState('')
+  
+  // ── NEW: Delivery Method State ──
+  const [deliveryMethod, setDeliveryMethod] = useState<'email' | 'whatsapp'>('email')
+  const [reprintOnlyWhatsApp, setReprintOnlyWhatsApp] = useState('')
 
   // ── Reprint Flow State Machine ──
   const [reprintFlow, setReprintFlow] = useState<ReprintFlowState>('idle')
@@ -193,7 +199,8 @@ export default function CitizenLinkAfrica() {
   const [reprintSuccess, setReprintSuccess] = useState<{
     amount: number
     receipt: string | null
-    email: string
+    deliveryDestination: string
+    method: string
   } | null>(null)
 
   const reprintPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -541,14 +548,13 @@ export default function CitizenLinkAfrica() {
     setCertResult(null)
 
     try {
-      // Hitting the exact TCC endpoint your backend exposes
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/tcc/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           type: certType,
-          tccNumber: cleanCertNo, // Matches your backend controller
-          kraPIN: cleanPin,       // Matches your backend controller
+          tccNumber: cleanCertNo,
+          kraPIN: cleanPin,
           turnstileToken: token
         }),
       })
@@ -616,7 +622,6 @@ export default function CitizenLinkAfrica() {
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok || !data.success) {
-        // If KRA returns 900 error code, it means no valid exemption
         if (data?.error?.code === '900' || data?.data?.response_code === '900') {
            setExemptionResult({
              response_code: '900',
@@ -628,7 +633,6 @@ export default function CitizenLinkAfrica() {
         return
       }
 
-      // If KRA returns 200 success
       setExemptionResult({
         response_code: data.data.response_code,
         response_message: data.data.response_message,
@@ -666,10 +670,20 @@ export default function CitizenLinkAfrica() {
       setReprintOnlyError('Please enter a valid KRA PIN (e.g. A0123456789Z).')
       return
     }
-    if (!reprintOnlyEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reprintOnlyEmail)) {
-      setReprintOnlyError('Please enter a valid email address.')
-      return
+
+    if (deliveryMethod === 'email') {
+      if (!reprintOnlyEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reprintOnlyEmail)) {
+        setReprintOnlyError('Please enter a valid email address.')
+        return
+      }
+    } else {
+      const cleanWhatsApp = reprintOnlyWhatsApp.replace(/\D/g, '')
+      if (cleanWhatsApp.length < 9) {
+        setReprintOnlyError('Please enter a valid WhatsApp number.')
+        return
+      }
     }
+
     const cleanPhone = reprintOnlyPaymentNo.replace(/\D/g, '')
     if (cleanPhone.length < 9) {
       setReprintOnlyError('Please enter a valid M-Pesa payment number.')
@@ -679,15 +693,19 @@ export default function CitizenLinkAfrica() {
     setReprintFlow('processing')
 
     try {
+      const payload = {
+        fullName: 'KRA PIN Customer',
+        idOrPin: cleanPin,
+        email: deliveryMethod === 'email' ? reprintOnlyEmail.trim() : null,
+        whatsapp: deliveryMethod === 'whatsapp' ? reprintOnlyWhatsApp.trim() : null,
+        deliveryMethod: deliveryMethod,
+        paymentPhone: reprintOnlyPaymentNo.trim(),
+      }
+
       const res = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/reprint/initiate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: 'KRA PIN Customer',
-          idOrPin: cleanPin,
-          email: reprintOnlyEmail.trim(),
-          paymentPhone: reprintOnlyPaymentNo.trim(),
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -770,7 +788,8 @@ export default function CitizenLinkAfrica() {
           setReprintSuccess({
             amount: data.data.amount || REPRINT_FEE,
             receipt: data.data.mpesa_receipt || null,
-            email: lookupMode === 'pin' ? reprintOnlyEmail : reprintEmail,
+            deliveryDestination: deliveryMethod === 'email' ? reprintOnlyEmail : reprintOnlyWhatsApp,
+            method: deliveryMethod === 'email' ? 'Email' : 'WhatsApp',
           })
           setReprintFlow('success')
           setShowReprintForm(false)
@@ -816,6 +835,7 @@ export default function CitizenLinkAfrica() {
           idOrPin: reprintIdOrPin.trim(),
           email: reprintEmail.trim(),
           paymentPhone: reprintPaymentNo.trim(),
+          deliveryMethod: 'email',
         }),
       })
 
@@ -865,6 +885,8 @@ export default function CitizenLinkAfrica() {
     setAgreedToTerms(false)
     setReprintOnlyEmail('')
     setReprintOnlyPaymentNo('')
+    setReprintOnlyWhatsApp('')
+    setDeliveryMethod('email')
     setReprintOnlyError('')
     setReprintFlow('idle')
     setLookupMode('id')
@@ -993,17 +1015,13 @@ export default function CitizenLinkAfrica() {
 {/* ──────── HEADER ──────── */}
       <header className="sticky top-0 z-50 w-full bg-[#fafafa]/80 backdrop-blur-xl pt-3 sm:pt-4">
         <div className="w-full px-2 sm:px-4 lg:px-6 pb-3 sm:pb-4">
-          {/* The pill container */}
           <div className="bg-[#f3f4f6] rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-200/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
-            
-            {/* Logo */}
             <Link href="/" className="flex items-center flex-shrink-0">
               <span className="text-2xl font-extrabold tracking-tight text-[#0a2540]">
                 Taxflow<span className="text-blue-600">.</span>
               </span>
             </Link>
 
-            {/* Center Nav Links (Desktop) */}
             <nav className="hidden lg:flex items-center space-x-7">
               <button className="text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors flex items-center gap-1 tracking-wide">
                 Products <ChevronDown className="w-4 h-4 text-slate-500" />
@@ -1031,10 +1049,7 @@ export default function CitizenLinkAfrica() {
               </button>
             </nav>
 
-            {/* Right Action Area */}
             <div className="flex items-center gap-3 sm:gap-4">
-              
-              {/* Search Icon */}
               <button
                 onClick={() => setShowCheckStatus(true)}
                 className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-200/50 rounded-full transition-all"
@@ -1043,7 +1058,6 @@ export default function CitizenLinkAfrica() {
                 <Search className="h-4 w-4" />
               </button>
 
-              {/* Login Link */}
               <Link 
                 href="/login" 
                 className="hidden sm:inline-flex text-[15px] font-medium text-slate-700 hover:text-[#0a2540] transition-colors"
@@ -1051,7 +1065,6 @@ export default function CitizenLinkAfrica() {
                 Log in
               </Link>
 
-              {/* CTA Button */}
               <Link
                 href="/signup"
                 className="hidden sm:inline-flex bg-[#0a2540] hover:bg-[#112d4e] text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
@@ -1059,7 +1072,6 @@ export default function CitizenLinkAfrica() {
                 Get Started
               </Link>
 
-              {/* Hamburger Menu (Mobile) */}
               <button
                 className="p-2 text-slate-500 hover:text-[#0a2540] hover:bg-slate-200/50 rounded-full transition-all lg:hidden"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -1074,7 +1086,6 @@ export default function CitizenLinkAfrica() {
 
       {/* ──────── MAIN CONTENT ──────── */}
       <main className="flex-1 w-full relative">
-        {/* Abstract background blobs for premium feel */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-blue-100/40 blur-[100px] rounded-full pointer-events-none -z-10" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 sm:pt-12 sm:pb-20">
@@ -1101,62 +1112,52 @@ export default function CitizenLinkAfrica() {
                   and stay compliant from anywhere.
                 </p>
 
-                {/* ════════════ USEFUL LINKS SECTION ════════════ */}
                 <div className="mt-8">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">
                     Useful Links
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 max-w-lg">
-                    
                     <div>
                       <h3 className="text-[15px] font-semibold text-[#0a2540]">New PIN Registration</h3>
                       <p className="text-[13px] text-slate-600 mt-1">
                         To get a new PIN, <Link href="#new-pin" className="text-blue-600 hover:underline">Click Here</Link>
                       </p>
                     </div>
-
                     <div>
                       <h3 className="text-[15px] font-semibold text-[#0a2540]">Tax Calculator</h3>
                       <p className="text-[13px] text-slate-600 mt-1">
                         Calculate your taxes, <Link href="#tax-calculator" className="text-blue-600 hover:underline">Click Here</Link>
                       </p>
                     </div>
-
                     <div>
                       <h3 className="text-[15px] font-semibold text-[#0a2540]">WhatsApp Tax Automation</h3>
                       <p className="text-[13px] text-slate-600 mt-1">
                         Automate via WhatsApp, <Link href="#whatsapp-tax" className="text-blue-600 hover:underline">Click Here</Link>
                       </p>
                     </div>
-
                     <div>
                       <h3 className="text-[15px] font-semibold text-[#0a2540]">Verify eTIMS Invoice</h3>
                       <p className="text-[13px] text-slate-600 mt-1">
                         Check an eTIMS invoice, <Link href="#verify-etims" className="text-blue-600 hover:underline">Click Here</Link>
                       </p>
                     </div>
-
                     <div>
                       <h3 className="text-[15px] font-semibold text-[#0a2540]">Verify Exemption Cert</h3>
                       <p className="text-[13px] text-slate-600 mt-1">
                         Validate a certificate, <Link href="#verify-exemption" className="text-blue-600 hover:underline">Click Here</Link>
                       </p>
                     </div>
-
                     <div>
                       <h3 className="text-[15px] font-semibold text-[#0a2540]">Check My Tax Station</h3>
                       <p className="text-[13px] text-slate-600 mt-1">
                         Find your station, <Link href="#tax-station" className="text-blue-600 hover:underline">Click Here</Link>
                       </p>
                     </div>
-
                   </div>
                 </div>
-                {/* ════════════ END USEFUL LINKS SECTION ════════════ */}
               </div>
 
               <div className="w-full">
-                {/* Mobile Services List */}
                 <div className="lg:hidden">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">
                     Select a service to begin:
@@ -1195,9 +1196,7 @@ export default function CitizenLinkAfrica() {
                   </div>
                 </div>
 
-                {/* Desktop Services Grid with Corner Arrow */}
                 <div className="hidden lg:block relative pr-8">
-                  
                   <div className="relative bg-white rounded-[2rem] shadow-[0_8px_40px_rgb(0,0,0,0.04)] ring-1 ring-slate-200/60 overflow-hidden">
                     <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-80" />
 
@@ -1728,7 +1727,7 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {/* ════════════ VERIFY KRA CERTIFICATES AND LICENSES FORM (NEW) ════════════ */}
+      {/* ════════════ VERIFY KRA CERTIFICATES AND LICENSES FORM ════════════ */}
       {showVerifyCertForm && (
         <ModalOverlay onClose={() => { setShowVerifyCertForm(false); resetVerifyCertForm() }} size="large">
           <div className="text-center mb-6">
@@ -2290,7 +2289,7 @@ export default function CitizenLinkAfrica() {
                       )}
                       <p className="mt-3 text-[12px] text-emerald-800">
                         Your certificate will be sent to{' '}
-                        <span className="font-semibold">{reprintSuccess.email}</span>
+                        <span className="font-semibold">{reprintSuccess.deliveryDestination}</span> via <span className="font-semibold">{reprintSuccess.method}</span>
                       </p>
                       <button
                         onClick={resetReprintForm}
@@ -2363,66 +2362,135 @@ export default function CitizenLinkAfrica() {
                     className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all font-mono uppercase"
                   />
                   <p className="mt-1.5 text-[11px] text-slate-500">
-                    Enter the KRA PIN you already have. We'll request the certificate from KRA and email it to you.
+                    Enter the KRA PIN you already have. We'll request the certificate from KRA and send it to you.
                   </p>
                 </div>
 
+                {/* ✅ NEW: Delivery Method Dropdown */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                    Email Address <span className="text-red-500">*</span>
+                    Delivery Method <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="email"
-                    required
-                    value={reprintOnlyEmail}
-                    onChange={(e) => setReprintOnlyEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
-                  />
-                  <p className="mt-1.5 text-[11px] text-slate-500">
-                    Your certificate will be sent here.
-                  </p>
+                  <div className="relative">
+                    <select
+                      value={deliveryMethod}
+                      onChange={(e) => setDeliveryMethod(e.target.value as 'email' | 'whatsapp')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all cursor-pointer"
+                    >
+                      <option value="email">Email Address</option>
+                      <option value="whatsapp">WhatsApp Number</option>
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
 
+                {/* ✅ NEW: Conditional Input Based on Delivery Method */}
+                {deliveryMethod === 'email' ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Mail className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        type="email"
+                        required
+                        value={reprintOnlyEmail}
+                        onChange={(e) => setReprintOnlyEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-slate-500">
+                      Your certificate will be sent here.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      WhatsApp Number <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <MessageCircle className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        type="tel"
+                        required
+                        value={reprintOnlyWhatsApp}
+                        onChange={(e) => setReprintOnlyWhatsApp(e.target.value)}
+                        placeholder="e.g. 0712345678"
+                        className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-slate-500">
+                      Your certificate will be sent to this WhatsApp number.
+                    </p>
+                  </div>
+                )}
+
+                {/* M-Pesa Payment Number */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                     M-Pesa Payment Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="tel"
-                    required
-                    value={reprintOnlyPaymentNo}
-                    onChange={(e) => setReprintOnlyPaymentNo(e.target.value)}
-                    placeholder="e.g. 07XXXXXXXX"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Smartphone className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input
+                      type="tel"
+                      required
+                      value={reprintOnlyPaymentNo}
+                      onChange={(e) => setReprintOnlyPaymentNo(e.target.value)}
+                      placeholder="e.g. 0712345678"
+                      className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all"
+                    />
+                  </div>
                   <p className="mt-1.5 text-[11px] text-slate-500">
-                    You'll receive an M-Pesa STK prompt for KES {REPRINT_FEE}.
+                    You will receive an M-Pesa STK push for KES {REPRINT_FEE}.
                   </p>
                 </div>
 
+                {/* Fee Summary */}
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-600">Certificate Reprint Fee</span>
+                  <span className="text-sm font-bold text-[#0a2540]">KES {REPRINT_FEE}.00</span>
+                </div>
+
+                {/* ✅ FIX: Pay button DISABLED for now */}
                 <button
                   type="submit"
-                  disabled={reprintFlow === 'processing'}
-                  className={`w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 ${
-                    reprintFlow === 'processing'
-                      ? 'bg-slate-300 text-white cursor-wait'
-                      : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
-                  }`}
+                  disabled
+                  title="Payment temporarily unavailable"
+                  className="w-full font-semibold text-base py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2 bg-slate-300 text-white cursor-not-allowed opacity-70"
                 >
-                  {reprintFlow === 'processing' ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending request...
-                    </>
-                  ) : (
-                    <>Pay KES {REPRINT_FEE} &amp; Request Certificate →</>
-                  )}
+                  Pay KES {REPRINT_FEE} & Get Certificate
+                  <span className="text-lg leading-none">→</span>
                 </button>
+                <p className="text-[10.5px] text-center text-amber-600 font-medium">
+                  Payments are temporarily paused. Please check back soon.
+                </p>
               </form>
+
+              {reprintFlow === 'processing' && (
+                <div className="mt-5 animate-pulse">
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full bg-slate-200" />
+                      <div className="h-4 w-32 bg-slate-200 rounded" />
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="h-4 w-full bg-slate-200 rounded" />
+                      <div className="h-4 w-3/4 bg-slate-200 rounded" />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {reprintFlow === 'pending' && (
                 <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center">
@@ -2436,12 +2504,6 @@ export default function CitizenLinkAfrica() {
                   <p className="mt-2 text-[11px] text-amber-600/80">
                     {(reprintPollCount * 2.5).toFixed(0)}s elapsed
                   </p>
-                  <button
-                    onClick={resetReprintForm}
-                    className="mt-4 text-[11.5px] font-medium text-amber-800 underline underline-offset-2 hover:text-amber-900"
-                  >
-                    I didn't receive a prompt — start over
-                  </button>
                 </div>
               )}
 
@@ -2461,16 +2523,10 @@ export default function CitizenLinkAfrica() {
                   )}
                   <p className="mt-3 text-[12px] text-emerald-800">
                     Your certificate will be sent to{' '}
-                    <span className="font-semibold">{reprintSuccess.email}</span>
+                    <span className="font-semibold">{reprintSuccess.deliveryDestination}</span> via <span className="font-semibold">{reprintSuccess.method}</span>
                   </p>
                   <button
-                    onClick={() => {
-                      resetPinForm()
-                      setLookupMode('id')
-                      setReprintOnlyEmail('')
-                      setReprintOnlyPaymentNo('')
-                      setReprintFlow('idle')
-                    }}
+                    onClick={resetReprintForm}
                     className="mt-5 w-full h-11 rounded-xl bg-[#0a2540] text-white text-[13px] font-semibold hover:bg-[#112d4e] transition-colors"
                   >
                     Done
@@ -2483,7 +2539,7 @@ export default function CitizenLinkAfrica() {
                   <div className="flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-red-800">Payment Failed</p>
+                      <p className="text-[13px] font-bold text-red-800">Request Failed</p>
                       <p className="mt-0.5 text-[11.5px] leading-snug text-red-700">{reprintOnlyError}</p>
                     </div>
                   </div>
@@ -2506,281 +2562,47 @@ export default function CitizenLinkAfrica() {
         </ModalOverlay>
       )}
 
-      {showReprintForm && (
-        <ModalOverlay onClose={() => { setShowReprintForm(false); resetReprintForm() }} size="compact">
-          <div className="mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200">
-                <FileText className="w-5 h-5 text-slate-700" />
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-[#0a2540] tracking-tight">
-                  KRA PIN Reprint
-                </h2>
-                <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed mt-0.5">
-                  PDF will be shared to your email.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {reprintError && (
-            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700">{reprintError}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleReprintSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={reprintFullName}
-                readOnly
-                placeholder="Enter full name"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-600 placeholder-slate-400 cursor-not-allowed text-sm font-medium"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                National ID or KRA PIN
-              </label>
-              <input
-                type="text"
-                value={reprintIdOrPin}
-                readOnly
-                placeholder="Enter National ID or KRA PIN"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-600 placeholder-slate-400 cursor-not-allowed text-sm font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                required
-                value={reprintEmail}
-                onChange={(e) => setReprintEmail(e.target.value)}
-                placeholder="Enter email address"
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Payment No
-              </label>
-              <input
-                type="tel"
-                required
-                value={reprintPaymentNo}
-                onChange={(e) => setReprintPaymentNo(e.target.value)}
-                placeholder="e.g. 07XXXXXXXX"
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0a2540]/20 focus:border-[#0a2540] transition-all text-sm"
-              />
-              <p className="mt-1.5 text-[10px] text-slate-500">
-                M-Pesa number that will receive the STK push prompt.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => { setShowReprintForm(false); resetReprintForm() }}
-                className="flex-1 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold text-sm py-3 rounded-xl transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={reprintFlow === 'processing'}
-                className={`flex-1 font-semibold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
-                  reprintFlow === 'processing'
-                    ? 'bg-slate-300 text-white cursor-wait'
-                    : 'bg-[#0a2540] hover:bg-[#112d4e] text-white shadow-md'
-                }`}
-              >
-                {reprintFlow === 'processing' ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Sending...
-                  </>
-                ) : (
-                  <>Pay Ksh {REPRINT_FEE}</>
-                )}
-              </button>
-            </div>
-          </form>
-        </ModalOverlay>
-      )}
-
-      {showPayment && (
-        <ModalOverlay onClose={() => setShowPayment(false)} size="large">
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="bg-emerald-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5 ring-1 ring-emerald-100">
-              <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600" />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Complete Payment</h2>
-            <p className="text-sm sm:text-base text-slate-500 mt-2">Pay KES {REPRINT_FEE} via M-Pesa</p>
-          </div>
-          <form onSubmit={handlePaymentSubmit} className="space-y-5">
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center">
-              <p className="text-sm text-slate-500 font-medium">Amount to Pay</p>
-              <p className="text-3xl sm:text-4xl font-extrabold text-[#0a2540] mt-1">KES {REPRINT_FEE}.00</p>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">M-Pesa Phone Number</label>
-              <input
-                type="tel"
-                required
-                className="w-full px-4 py-3.5 rounded-xl border border-slate-300 focus:border-[#0a2540] focus:ring-2 focus:ring-[#0a2540]/20 outline-none transition-all text-base"
-                placeholder="0712 345 678"
-                value={paymentData.phoneNumber}
-                onChange={(e) => setPaymentData({ ...paymentData, phoneNumber: e.target.value })}
-              />
-            </div>
-            <button type="submit" className="w-full bg-[#0a2540] hover:bg-[#112d4e] text-white py-3.5 sm:py-4 rounded-xl font-semibold transition-all text-base sm:text-lg shadow-lg">
-              Pay Now
-            </button>
-          </form>
-        </ModalOverlay>
-      )}
-
-      {showSuccess && (
-        <ModalOverlay onClose={() => setShowSuccess(false)} size="large">
-          <div className="text-center">
-            <div className="bg-emerald-50 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6 ring-1 ring-emerald-100">
-              <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500" />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Payment Successful!</h2>
-            <p className="text-sm sm:text-base text-slate-500 mt-2">Your KRA request has been received.</p>
-            <div className="bg-slate-50 rounded-2xl p-4 mt-6 border border-slate-200">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tracking Number</p>
-              <p className="text-xl sm:text-2xl font-bold text-blue-600 tracking-wider font-mono">{trackingNumber}</p>
-            </div>
-            <button onClick={() => setShowSuccess(false)} className="w-full mt-6 bg-white border border-slate-300 text-slate-700 py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all text-base sm:text-lg">
-              Close
-            </button>
-          </div>
-        </ModalOverlay>
-      )}
-
-      {showCheckStatus && (
-        <ModalOverlay onClose={() => setShowCheckStatus(false)} size="large">
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="bg-indigo-50 rounded-2xl p-4 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-4 sm:mb-5 ring-1 ring-indigo-100">
-              <Search className="h-7 w-7 sm:h-8 sm:w-8 text-indigo-600" />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Track KRA Request</h2>
-            <p className="text-sm sm:text-base text-slate-500 mt-2">
-              Enter your Reference Number or M-Pesa Receipt
-            </p>
-          </div>
-          <form onSubmit={(e) => { e.preventDefault(); handleTrackRequest() }} className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Reference Number or M-Pesa Receipt</label>
-              <input
-                type="text"
-                required
-                className="w-full px-4 py-3.5 rounded-xl border border-slate-300 focus:border-[#0a2540] focus:ring-2 focus:ring-[#0a2540]/20 outline-none transition-all text-base"
-                placeholder="e.g. CLA-2026-000154 or TGH5KD9L1M"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isSearching}
-              className="w-full bg-[#0a2540] hover:bg-[#112d4e] text-white py-3.5 sm:py-4 rounded-xl font-semibold transition-all text-base sm:text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSearching ? 'Searching...' : 'Track Request'}
-            </button>
-          </form>
-        </ModalOverlay>
-      )}
-
-      {showOrderResult && (
-        <ModalOverlay onClose={() => { setShowOrderResult(false); setOrderStatus('') }} size="large">
-          <div className="text-center">
-            <div className={`rounded-full w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mx-auto mb-5 sm:mb-6 ${
-              orderStatus === 'Ready for Download' ? 'bg-emerald-50 ring-1 ring-emerald-100' : 'bg-amber-50 ring-1 ring-amber-100'
-            }`}>
-              {orderStatus === 'Ready for Download'
-                ? <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500" />
-                : <Clock className="h-10 w-10 sm:h-12 sm:w-12 text-amber-500" />}
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] tracking-tight">Order Status</h2>
-            <div className={`mt-3 inline-block px-4 py-1.5 rounded-full text-sm font-bold ${
-              orderStatus === 'Ready for Download' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-            }`}>
-              {orderStatus || 'Processing'}
-            </div>
-            <p className="text-sm sm:text-base text-slate-500 mt-4">
-              Tracking Number: <span className="font-mono font-semibold text-slate-900">{trackingNumber}</span>
-            </p>
-            {isCounting && !isReady && (
-              <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4">
-                <div className="flex items-center justify-center gap-2">
-                  <Timer className="h-5 w-5 text-blue-500 animate-pulse" />
-                  <span className="text-sm text-slate-700 font-medium">
-                    Time remaining: <span className="font-bold text-blue-600">{formatTime(countdown)}</span>
-                  </span>
-                </div>
-              </div>
-            )}
-            {orderStatus === 'Ready for Download' && (
-              <button onClick={handleDownload} className="w-full mt-6 bg-[#0a2540] hover:bg-[#112d4e] text-white py-3.5 sm:py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3 text-base sm:text-lg shadow-lg">
-                <Download className="h-5 w-5 sm:h-6 sm:w-6" />
-                Download Certificate
-              </button>
-            )}
-            <button onClick={() => { setShowOrderResult(false); setOrderStatus('') }} className="w-full mt-3 bg-white border border-slate-300 text-slate-700 py-3.5 sm:py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all text-base sm:text-lg">
-              Close
-            </button>
-          </div>
-        </ModalOverlay>
-      )}
-
-      {/* 4. ADD THE PRICING MODAL AT THE BOTTOM */}
-      <PricingModal 
-        isOpen={showPricingModal} 
-        onClose={() => setShowPricingModal(false)} 
-        onStartFree={() => {
-          setShowFindPINForm(true)
-        }} 
-      />
+      {/* ════════════════ PRICING MODAL ════════════════ */}
+<PricingModal
+  isOpen={showPricingModal}
+  onClose={() => setShowPricingModal(false)}
+  onStartFree={() => {
+    setShowPricingModal(false)
+    // Optional: navigate to signup, or open a signup modal
+    window.location.href = '/signup'
+  }}
+/>
     </div>
   )
 }
 
-// Reusable Modal
-function ModalOverlay({ children, onClose, size = 'default' }: {
+// ════════════════ MODAL OVERLAY COMPONENT ════════════════
+function ModalOverlay({
+  children,
+  onClose,
+  size = 'default',
+}: {
   children: React.ReactNode
   onClose: () => void
-  size?: 'default' | 'large' | 'compact'
+  size?: 'default' | 'large'
 }) {
-  const maxWidth =
-    size === 'large' ? 'max-w-lg sm:max-w-xl' :
-    size === 'compact' ? 'max-w-sm sm:max-w-md' :
-    'max-w-sm sm:max-w-md'
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      <div className={`relative bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl w-full ${maxWidth} p-5 sm:p-7 md:p-8 border border-slate-100 overflow-y-auto max-h-[90vh] transform transition-all`}>
+    <div
+      className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className={`relative w-full ${
+          size === 'large' ? 'max-w-lg sm:max-w-xl' : 'max-w-md'
+        } bg-white rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 max-h-[92vh] overflow-y-auto`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 sm:top-5 sm:right-5 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-full p-2 transition-all z-10"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition-all z-10"
+          aria-label="Close"
         >
-          <X className="h-4 w-4" />
+          <X className="w-5 h-5" />
         </button>
         {children}
       </div>
