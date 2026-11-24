@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   AlertCircle,
@@ -42,7 +43,6 @@ import HelpSupportPage from "./HelpSupport";
 // --------------------------------------------------
 // Navigation configuration
 // --------------------------------------------------
-
 const navigation = [
   { name: "Overview", icon: House },
   { name: "Workflows", icon: Workflow },
@@ -55,9 +55,8 @@ const navigation = [
 ];
 
 // --------------------------------------------------
-// Sample dashboard data (Placeholders - will be replaced by real data)
+// Sample dashboard data
 // --------------------------------------------------
-
 const stats = [
   {
     title: "Active Automations",
@@ -91,8 +90,9 @@ const submissions: any[] = [];
 // --------------------------------------------------
 // Main dashboard page
 // --------------------------------------------------
-
 export default function DashboardPage() {
+  const router = useRouter();
+
   const [activePage, setActivePage] = useState("Overview");
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -100,16 +100,45 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Real User State
+  const [user, setUser] = useState<any>(null);
+
   const [accountOpen, setAccountOpen] = useState(false);
   const [currentAccount, setCurrentAccount] = useState("Individual Account");
 
-  // Simulate data fetching on mount
+  // Fetch real user data on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500); // 1.5 seconds loading time
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        
+        if (res.status === 401) {
+          // Session expired or invalid, kick to login
+          router.replace('/login');
+          return;
+        }
+
+        const data = await res.json();
+        
+        if (data.success && data.data) {
+          setUser(data.data);
+          // Set account type based on backend response
+          if (data.data.account_type === 'Business') {
+            setCurrentAccount("Business Account");
+          } else {
+            setCurrentAccount("Individual Account");
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch user session:', error);
+      } finally {
+        // Artificial delay just to show the skeleton for a moment
+        setTimeout(() => setIsLoading(false), 800);
+      }
+    };
+
+    fetchUser();
+  }, [router]);
 
   function handleNavigation(name: string) {
     setActivePage(name);
@@ -119,9 +148,22 @@ export default function DashboardPage() {
     setAccountOpen(false);
   }
 
-  function handleSignOut() {
-    // Connect your authentication provider's sign-out function here.
+  async function handleSignOut() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Logout failed:', error);
+    } finally {
+      router.replace('/login');
+      router.refresh();
+    }
   }
+
+  // Get display name from backend user object
+  const displayName = user?.business_name || user?.first_name || user?.email?.split('@')[0] || "User";
+  const userInitial = displayName.charAt(0).toUpperCase();
+  const userEmail = user?.email || "user@example.com";
+  const userIdString = user?.merchant_id ? `ID: ${user.merchant_id}` : currentAccount;
 
   return (
     <div className="min-h-screen bg-[#F7F9F8] text-slate-800">
@@ -370,16 +412,16 @@ export default function DashboardPage() {
                 }}
                 className="flex items-center gap-2 rounded-xl p-1.5 transition hover:bg-slate-100 sm:gap-3"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-900">
-                  U
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-900 uppercase">
+                  {userInitial}
                 </div>
 
                 <div className="hidden text-left sm:block">
-                  <p className="text-sm font-semibold text-slate-800">
-                    User
+                  <p className="text-sm font-semibold text-slate-800 truncate max-w-[120px]">
+                    {displayName}
                   </p>
-                  <p className="text-[11px] text-slate-400">
-                    {currentAccount}
+                  <p className="text-[11px] text-slate-400 truncate max-w-[120px]">
+                    {userIdString}
                   </p>
                 </div>
 
@@ -392,10 +434,10 @@ export default function DashboardPage() {
               {profileOpen && (
                 <div className="absolute right-0 top-14 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
                   <div className="border-b border-slate-100 px-3 py-3">
-                    <p className="text-sm font-semibold text-slate-900">
-                      User Name
+                    <p className="text-sm font-semibold text-slate-900 truncate">
+                      {displayName}
                     </p>
-                    <p className="text-xs text-slate-400">user@example.com</p>
+                    <p className="text-xs text-slate-400 truncate">{userEmail}</p>
                   </div>
 
                   <ProfileMenuItem
@@ -424,7 +466,7 @@ export default function DashboardPage() {
           {isLoading ? (
             <DashboardSkeleton />
           ) : activePage === "Overview" ? (
-            <DashboardHome onNavigate={handleNavigation} />
+            <DashboardHome onNavigate={handleNavigation} user={user} />
           ) : activePage === "Workflows" ? (
             <WorkflowsPage
               onGoToPricing={() => handleNavigation("My Subscription")}
@@ -466,8 +508,7 @@ export default function DashboardPage() {
 // --------------------------------------------------
 // Dashboard home content
 // --------------------------------------------------
-
-function DashboardHome({ onNavigate }: { onNavigate: (page: string) => void }) {
+function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => void; user: any }) {
   const [openAccountCard, setOpenAccountCard] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(
     linkedAccounts[0] || { name: "No Account", pin: "" }
@@ -541,7 +582,7 @@ function DashboardHome({ onNavigate }: { onNavigate: (page: string) => void }) {
         </p>
 
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Welcome back!
+          Welcome back, {user?.first_name || user?.business_name || 'there'}!
         </h1>
 
         <p className="mt-2 text-sm text-slate-500">
@@ -549,7 +590,7 @@ function DashboardHome({ onNavigate }: { onNavigate: (page: string) => void }) {
         </p>
       </section>
 
-      {/* Stats */}
+      {/* ... rest of DashboardHome JSX stays exactly the same ... */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -849,7 +890,6 @@ function DashboardHome({ onNavigate }: { onNavigate: (page: string) => void }) {
 // --------------------------------------------------
 // Loading Skeleton Component
 // --------------------------------------------------
-
 function DashboardSkeleton() {
   return (
     <div className="space-y-8 animate-pulse">
@@ -924,7 +964,6 @@ function DashboardSkeleton() {
 // --------------------------------------------------
 // Reusable components
 // --------------------------------------------------
-
 function NotificationItem({
   icon: Icon,
   title,
@@ -1000,39 +1039,9 @@ function QuickAction({
   );
 }
 
-function ActivityItem({
-  icon: Icon,
-  title,
-  description,
-  time,
-  color,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  time: string;
-  color: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className={`rounded-xl p-2.5 ${color}`}>
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-800">{title}</p>
-        <p className="mt-1 text-xs text-slate-500">{description}</p>
-      </div>
-      <span className="whitespace-nowrap text-[10px] text-slate-400">
-        {time}
-      </span>
-    </div>
-  );
-}
-
 // --------------------------------------------------
 // Placeholder for other navigation destinations
 // --------------------------------------------------
-
 function SectionPlaceholder({
   title,
   onBack,
