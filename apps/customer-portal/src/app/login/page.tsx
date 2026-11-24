@@ -30,6 +30,7 @@ export default function LoginPage() {
       const res = await fetch(`${apiUrl}/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ⚠️ CRITICAL: Saves the xeco_otp cookie from the backend
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password,
@@ -51,36 +52,23 @@ export default function LoginPage() {
         return
       }
 
-      // Extract token — adjust to your backend's response shape
-      const token =
-        data.token ||
-        data.accessToken ||
-        data.access_token ||
-        data?.data?.token ||
-        data?.data?.accessToken
-
-      if (!token) {
-        setError('Login succeeded but no token was returned. Contact support.')
-        console.error('Unexpected login response:', data)
-        return
+      // ── Handle OTP Requirement ──
+      if (data.requiresOTP) {
+        // Save the email so the OTP page knows who is verifying
+        sessionStorage.setItem('pendingEmail', email.trim().toLowerCase())
+        sessionStorage.setItem('rememberMe', String(rememberMe))
+        
+        // Redirect to the OTP page
+        router.push('/verify-otp')
+        return // Stop execution here, do not look for a token yet
       }
 
-      // Persist token
-      if (rememberMe) {
-        localStorage.setItem('token', token)
-      } else {
-        sessionStorage.setItem('token', token)
-      }
-
-      // Optional: store user info
-      const user = data.user || data?.data?.user
-      if (user) {
-        localStorage.setItem('user', JSON.stringify(user))
-      }
-
-      // Redirect to dashboard
+      // ── Normal Flow (If your backend ever skips OTP) ──
+      // Note: Since your backend uses httpOnly cookies, the token isn't in the JSON response.
+      // If it succeeds without OTP, we just redirect to the dashboard.
       router.push('/dashboard')
       router.refresh()
+
     } catch (err) {
       console.error(err)
       setError('Something went wrong. Please check your connection and try again.')
