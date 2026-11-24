@@ -116,8 +116,8 @@ importers:
         specifier: ^1.6.3
         version: 1.6.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       lucide-react:
-        specifier: ^1.24.0
-        version: 1.49.0(@types/react@18.3.31)(react@18.3.1)
+        specifier: ^1.77.0
+        version: 1.79.0(@types/react@18.3.31)(react@18.3.1)
       next:
         specifier: ^14.0.0
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -851,8 +851,8 @@ packages:
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0
 
-  lucide-react@1.49.0:
-    resolution: {integrity: sha512-ApfaNM4/7jBrVopqLJ84Jz8TMQ1Q1JeZ1PmKh25aeS3E1FTVcMkSh1bEQB7dfzdIrwXRP8p3z4AJjTIHHb5IIA==}
+  lucide-react@1.79.0:
+    resolution: {integrity: sha512-MDHKxzUobPRyQgt4hHO1z+pUQJKYMvenh8qw+ndWQE0Wg+Hbjli/ZrkZXBGmRBrMvvqDRjkmQj0Z5RbeL/ogNw==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -2014,7 +2014,7 @@ snapshots:
     dependencies:
       react: 18.3.1
 
-  lucide-react@1.49.0(@types/react@18.3.31)(react@18.3.1):
+  lucide-react@1.79.0(@types/react@18.3.31)(react@18.3.1):
     dependencies:
       react: 18.3.1
     optionalDependencies:
