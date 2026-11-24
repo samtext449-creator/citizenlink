@@ -23,22 +23,21 @@ export default function VerifyOtpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL
-
-    if (!apiUrl) {
-      setError('Configuration error: API URL is missing.')
+    
+    if (otp.length !== 6) {
+      setError('Please enter a valid 6-digit code.')
       return
     }
 
     setIsLoading(true)
 
     try {
-      const res = await fetch(`${apiUrl}/v1/auth/verify-otp`, {
+      // ✅ Call your own Next.js API proxy, not the Render backend directly
+      const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // ⚠️ CRITICAL: Sends the xeco_otp cookie and receives session cookies
         body: JSON.stringify({ 
-          code: otp // ⚠️ IMPORTANT: Your backend expects "code", not "otp"
+          code: otp // Your backend expects "code"
         }),
       })
 
@@ -56,8 +55,8 @@ export default function VerifyOtpPage() {
         return
       }
 
-      // Success! The backend successfully set the httpOnly xeco_session cookie.
-      // We just need to clean up and route to the dashboard.
+      // Success! The Next.js proxy successfully received the httpOnly xeco_session cookie
+      // from the backend and saved it to the browser.
       sessionStorage.removeItem('pendingEmail')
       sessionStorage.removeItem('rememberMe')
       
@@ -124,7 +123,11 @@ export default function VerifyOtpPage() {
         <div className="mt-8 text-center">
           <p className="text-[13px] text-slate-600 font-medium">
             Didn't receive the code?{' '}
-            <button type="button" className="text-blue-600 font-bold hover:underline">
+            <button 
+              type="button" 
+              onClick={() => alert('Resend logic goes here')}
+              className="text-blue-600 font-bold hover:underline"
+            >
               Resend
             </button>
           </p>

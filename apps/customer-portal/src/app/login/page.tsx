@@ -16,24 +16,17 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL
-    if (!apiUrl) {
-      setError('Configuration error: API URL is not set.')
-      console.error('NEXT_PUBLIC_API_URL is undefined')
-      return
-    }
-
     setIsLoading(true)
 
     try {
-      const res = await fetch(`${apiUrl}/v1/auth/login`, {
+      // ✅ Call your own Next.js API proxy, not the Render backend directly
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // ⚠️ CRITICAL: Saves the xeco_otp cookie from the backend
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password,
+          rememberMe,
         }),
       })
 
@@ -56,16 +49,14 @@ export default function LoginPage() {
       if (data.requiresOTP) {
         // Save the email so the OTP page knows who is verifying
         sessionStorage.setItem('pendingEmail', email.trim().toLowerCase())
-        sessionStorage.setItem('rememberMe', String(rememberMe))
         
         // Redirect to the OTP page
         router.push('/verify-otp')
-        return // Stop execution here, do not look for a token yet
+        return // Stop execution here
       }
 
       // ── Normal Flow (If your backend ever skips OTP) ──
-      // Note: Since your backend uses httpOnly cookies, the token isn't in the JSON response.
-      // If it succeeds without OTP, we just redirect to the dashboard.
+      // The Next.js proxy has already saved the httpOnly cookies to the browser.
       router.push('/dashboard')
       router.refresh()
 
