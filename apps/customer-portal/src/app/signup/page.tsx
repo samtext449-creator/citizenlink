@@ -2,32 +2,94 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Mail, Phone, Lock, Eye, EyeOff, ChevronDown, User } from 'lucide-react'
 
 export default function SignupPage() {
+  const router = useRouter()
+
   const [formData, setFormData] = useState({
-    accountType: 'individual', 
+    accountType: 'individual',
     fullName: '',
     phone: '',
     email: '',
     password: '',
     confirmPassword: '',
   })
-  
+
   const [showPassword, setShowPassword] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Button is disabled, so this won't trigger for now
-    console.log(formData)
-  }
+  const [success, setSuccess] = useState('')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    setFormData((prev) => ({ ...prev, [name]: value }))
+    setError('')
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    // ── Client-side validation ──────────────────────────────
+    if (!agreedToTerms) {
+      setError('You must agree to the Terms and Privacy Policy')
+      return
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          fullName: formData.fullName.trim(),
+          phone: formData.phone.trim(),
+          accountType: formData.accountType === 'business' ? 'Business' : 'Individual',
+          country: 'KE',
+          termsVersion: '1.0',
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.message || 'Registration failed. Please try again.')
+        return
+      }
+
+      // Success
+      setSuccess(data.message || 'Registration successful! Please check your email to verify your account.')
+      
+      // Optional: redirect after a short delay
+      setTimeout(() => {
+        router.push('/login')
+      }, 2500)
+
+    } catch (err) {
+      console.error(err)
+      setError('Something went wrong. Please check your connection and try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -50,6 +112,13 @@ export default function SignupPage() {
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
             {error}
+          </div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
+            {success}
           </div>
         )}
 
@@ -221,16 +290,29 @@ export default function SignupPage() {
             </label>
           </div>
 
-          {/* Submit Button (Disabled for now) */}
+          {/* Submit Button */}
           <button
             type="submit"
-            disabled={true}
-            className="w-full text-slate-500 font-bold py-3 rounded-lg transition-colors mt-2 text-sm bg-slate-200 cursor-not-allowed flex items-center justify-center"
+            disabled={isLoading || !agreedToTerms}
+            className={`w-full font-bold py-3 rounded-lg transition-colors mt-2 text-sm flex items-center justify-center
+              ${isLoading || !agreedToTerms
+                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                : 'bg-[#0a2540] hover:bg-[#0d2f4f] text-white'
+              }`}
           >
-            Register
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating account...
+              </>
+            ) : (
+              'Register'
+            )}
           </button>
         </form>
-
       </div>
 
       {/* ──────── BOTTOM LINK ──────── */}
@@ -242,7 +324,6 @@ export default function SignupPage() {
           </Link>
         </p>
       </div>
-
     </div>
   )
 }
