@@ -2,23 +2,98 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
+  const router = useRouter()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle login logic here
-    console.log({ email, password, rememberMe })
+    setError('')
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    if (!apiUrl) {
+      setError('Configuration error: API URL is not set.')
+      console.error('NEXT_PUBLIC_API_URL is undefined')
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const res = await fetch(`${apiUrl}/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      })
+
+      // Safely parse JSON or HTML error page
+      const text = await res.text()
+      let data: any = {}
+      try {
+        data = text ? JSON.parse(text) : {}
+      } catch {
+        setError(`Server error (${res.status}). Please try again.`)
+        return
+      }
+
+      if (!res.ok) {
+        setError(data.message || 'Invalid email or password.')
+        return
+      }
+
+      // Extract token — adjust to your backend's response shape
+      const token =
+        data.token ||
+        data.accessToken ||
+        data.access_token ||
+        data?.data?.token ||
+        data?.data?.accessToken
+
+      if (!token) {
+        setError('Login succeeded but no token was returned. Contact support.')
+        console.error('Unexpected login response:', data)
+        return
+      }
+
+      // Persist token
+      if (rememberMe) {
+        localStorage.setItem('token', token)
+      } else {
+        sessionStorage.setItem('token', token)
+      }
+
+      // Optional: store user info
+      const user = data.user || data?.data?.user
+      if (user) {
+        localStorage.setItem('user', JSON.stringify(user))
+      }
+
+      // Redirect to dashboard
+      router.push('/dashboard')
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+      setError('Something went wrong. Please check your connection and try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#fafafa] font-sans">
       <div className="w-full max-w-[460px] bg-white p-8 sm:p-10 border border-slate-200 shadow-sm rounded-xl">
-        
-        {/* Centered Logo - Matching your main site colors */}
+
+        {/* Logo */}
         <div className="flex flex-col items-center mb-10">
           <div className="w-16 h-16 bg-[#0a2540] rounded-2xl flex items-center justify-center mb-4 shadow-md">
             <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -31,8 +106,15 @@ export default function LoginPage() {
           </h1>
         </div>
 
+        {/* Error */}
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email Field */}
+          {/* Email */}
           <div>
             <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">
               Email address or ID number <span className="text-red-500">*</span>
@@ -40,14 +122,14 @@ export default function LoginPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setError('') }}
               placeholder="Enter your Email address or ID number"
               className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all"
               required
             />
           </div>
 
-          {/* Password Field */}
+          {/* Password */}
           <div>
             <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">
               Password <span className="text-red-500">*</span>
@@ -55,14 +137,14 @@ export default function LoginPage() {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setError('') }}
               placeholder="••••••••••••"
               className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all"
               required
             />
           </div>
 
-          {/* Remember Me & Forgot Password */}
+          {/* Remember + Forgot */}
           <div className="flex items-center justify-between pt-1">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -78,17 +160,31 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          {/* Primary Login Button - DISABLED */}
+          {/* Submit */}
           <button
             type="submit"
-            disabled={true}
-            className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-lg mt-2 text-sm cursor-not-allowed flex items-center justify-center"
+            disabled={isLoading}
+            className={`w-full font-bold py-3 rounded-lg mt-2 text-sm flex items-center justify-center transition-colors
+              ${isLoading
+                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                : 'bg-[#0a2540] hover:bg-[#0d2f4f] text-white'
+              }`}
           >
-            Log in
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Logging in...
+              </>
+            ) : (
+              'Log in'
+            )}
           </button>
         </form>
 
-        {/* Divider - "Or continue with" */}
+        {/* Divider */}
         <div className="relative flex items-center justify-center my-6">
           <div className="flex-grow border-t border-slate-200"></div>
           <span className="flex-shrink-0 mx-4 text-[13px] font-semibold text-slate-400">
@@ -97,7 +193,7 @@ export default function LoginPage() {
           <div className="flex-grow border-t border-slate-200"></div>
         </div>
 
-        {/* Google Login Button */}
+        {/* Google */}
         <button
           type="button"
           onClick={() => alert('Google login clicked')}
@@ -112,7 +208,7 @@ export default function LoginPage() {
           Log in with Google
         </button>
 
-        {/* Footer Link */}
+        {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-[13px] text-slate-600 font-medium">
             Need an account?{' '}
@@ -121,7 +217,6 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-
       </div>
     </div>
   )
