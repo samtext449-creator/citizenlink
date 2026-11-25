@@ -1,21 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   ArrowRight,
+  ArrowUp,
+  BellRing,
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   FileSpreadsheet,
   FileText,
   FolderOpen,
   Landmark,
+  Lock,
   Mail,
   MessageSquare,
-  Plus,
-  Search,
-  ShieldCheck,
   Smartphone,
   Workflow as WorkflowIcon,
   X,
@@ -23,7 +25,7 @@ import {
   User,
   Building,
   Loader2,
-  CreditCard
+  CreditCard,
 } from "lucide-react";
 
 // --------------------------------------------------
@@ -31,7 +33,7 @@ import {
 // --------------------------------------------------
 
 type WfStatus = "active" | "draft" | "attention";
-type Tab = "all" | "active" | "drafts" | "templates";
+type Tab = "all" | "active" | "drafts";
 
 type WorkflowItem = {
   id: string;
@@ -46,14 +48,14 @@ type WorkflowItem = {
 };
 
 const TEMPLATES = [
-  { id: "nil", name: "Automate Nil Returns", description: "Automate monthly nil return filing for taxpayers with no income to declare.", service: "Nil Returns", price: 200, serviceStatus: "active", schedule: "Monthly · due by the 20th", integrations: ["itax", "email"], obligation: "Nil Returns" },
-  { id: "tot", name: "Automate Turnover Tax", description: "Manage turnover tax filing for eligible small businesses.", service: "Turnover Tax", price: 300, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "Turnover Tax" },
-  { id: "paye", name: "Automate PAYE", description: "Automate PAYE returns for your employees.", service: "PAYE", price: 400, serviceStatus: "expired", schedule: "Monthly · due by the 9th", integrations: ["sheets", "itax"], obligation: "PAYE" },
-  { id: "vat", name: "Automate VAT", description: "Prepare and submit VAT returns on schedule.", service: "VAT", price: 600, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "VAT" },
-  { id: "itr", name: "Automate Income Tax", description: "File your annual Individual Income Tax return.", service: "Income Tax", price: 250, serviceStatus: "available", schedule: "Annual · due by 30 June", integrations: ["docs", "itax"], obligation: "Income Tax" },
-  { id: "mri", name: "Automate Rental Income", description: "File Monthly Rental Income tax for your properties.", service: "Rental Income", price: 250, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "Rental Income" },
-  { id: "wht", name: "Automate Withholding Tax", description: "Compute and file Withholding Tax on payments to suppliers.", service: "Withholding Tax", price: 350, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "Withholding Tax" },
-  { id: "cit", name: "Automate Corporation Tax", description: "Manage Corporation Tax instalments for your company.", service: "Corporation Tax", price: 700, serviceStatus: "available", schedule: "Quarterly instalments · due on the 20th", integrations: ["sheets", "itax"], obligation: "Corporation Tax" },
+  { id: "nil", name: "Automate Nil Returns", description: "Automate monthly nil return filing for taxpayers with no income to declare.", service: "Nil Returns", price: 200, serviceStatus: "active", schedule: "Monthly · due by the 20th", integrations: ["itax", "email"], obligation: "Nil Returns", keywords: ["nil", "no income", "zero", "monthly return"] },
+  { id: "tot", name: "Automate Turnover Tax", description: "Manage turnover tax filing for eligible small businesses.", service: "Turnover Tax", price: 300, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "Turnover Tax", keywords: ["turnover", "tot", "sales", "small business"] },
+  { id: "paye", name: "Automate PAYE", description: "Automate PAYE returns for your employees.", service: "PAYE", price: 400, serviceStatus: "expired", schedule: "Monthly · due by the 9th", integrations: ["sheets", "itax"], obligation: "PAYE", keywords: ["paye", "payroll", "employee", "salary", "salaries"] },
+  { id: "vat", name: "Automate VAT", description: "Prepare and submit VAT returns on schedule.", service: "VAT", price: 600, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "VAT", keywords: ["vat", "value added", "purchases"] },
+  { id: "itr", name: "Automate Income Tax", description: "File your annual Individual Income Tax return.", service: "Income Tax", price: 250, serviceStatus: "available", schedule: "Annual · due by 30 June", integrations: ["docs", "itax"], obligation: "Income Tax", keywords: ["income tax", "itr", "annual", "individual", "p9"] },
+  { id: "mri", name: "Automate Rental Income", description: "File Monthly Rental Income tax for your properties.", service: "Rental Income", price: 250, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "Rental Income", keywords: ["rent", "rental", "mri", "landlord", "property", "tenant"] },
+  { id: "wht", name: "Automate Withholding Tax", description: "Compute and file Withholding Tax on payments to suppliers.", service: "Withholding Tax", price: 350, serviceStatus: "available", schedule: "Monthly · due by the 20th", integrations: ["sheets", "itax"], obligation: "Withholding Tax", keywords: ["withholding", "wht", "supplier", "suppliers"] },
+  { id: "cit", name: "Automate Corporation Tax", description: "Manage Corporation Tax instalments for your company.", service: "Corporation Tax", price: 700, serviceStatus: "available", schedule: "Quarterly · due on the 20th", integrations: ["sheets", "itax"], obligation: "Corporation Tax", keywords: ["corporation", "corporate", "company", "instalment", "installment", "cit"] },
 ];
 
 const INTEGRATIONS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -67,18 +69,18 @@ const INTEGRATIONS: Record<string, { label: string; icon: React.ElementType; col
   calendar: { label: "Reminders", icon: CalendarClock, color: "text-rose-600" },
 };
 
+// Short, scannable headlines (two lines max) and a muted band colour per template
 const GALLERY = [
-  { id: "g1", templateId: "nil", title: "File monthly Nil Returns on KRA iTax and email you the acknowledgement receipt", integrations: ["itax", "email", "docs", "calendar"] },
-  { id: "g3", templateId: "tot", title: "Calculate Turnover Tax from your monthly sales and file it on KRA iTax", integrations: ["sheets", "itax", "docs", "email"] },
-  { id: "g5", templateId: "paye", title: "Prepare PAYE returns from your payroll sheet and file them on KRA iTax", integrations: ["sheets", "itax", "docs", "email", "calendar"] },
-  { id: "g7", templateId: "vat", title: "Prepare VAT returns from your sales and purchase records and submit to KRA", integrations: ["sheets", "itax", "docs", "email", "drive", "calendar"] },
-  { id: "g9", templateId: "itr", title: "Gather your income documents and file your annual Individual Income Tax return on KRA iTax", integrations: ["docs", "itax", "drive", "email", "calendar"] },
-  { id: "g11", templateId: "mri", title: "Calculate Monthly Rental Income tax from your rent records and file it on KRA iTax", integrations: ["sheets", "itax", "docs", "email"] },
-  { id: "g13", templateId: "wht", title: "Compute Withholding Tax on supplier payments and file it on KRA iTax", integrations: ["sheets", "itax", "docs", "email", "calendar"] },
-  { id: "g15", templateId: "cit", title: "Calculate quarterly Corporation Tax instalments and file them on KRA iTax", integrations: ["sheets", "itax", "docs", "email", "calendar"] },
+  { id: "g1", templateId: "nil", headline: "File monthly nil returns and email the receipt", band: "#CDDACA", integrations: ["email", "docs", "itax"] },
+  { id: "g3", templateId: "tot", headline: "Work out turnover tax from your sales and file it", band: "#CBD9E3", integrations: ["sheets", "docs", "itax"] },
+  { id: "g5", templateId: "paye", headline: "Prepare PAYE from your payroll sheet and file it", band: "#E8DBBB", integrations: ["sheets", "docs", "itax"] },
+  { id: "g7", templateId: "vat", headline: "Prepare VAT from sales and purchases and submit", band: "#E7C5C8", integrations: ["sheets", "drive", "itax"] },
+  { id: "g9", templateId: "itr", headline: "Gather income documents and file your annual return", band: "#D9CFE4", integrations: ["docs", "drive", "itax"] },
+  { id: "g11", templateId: "mri", headline: "Calculate rental income tax from your rent records", band: "#C8DDD8", integrations: ["sheets", "docs", "itax"] },
+  { id: "g13", templateId: "wht", headline: "Work out withholding tax on supplier payments", band: "#EBD3C0", integrations: ["sheets", "docs", "itax"] },
+  { id: "g15", templateId: "cit", headline: "Calculate quarterly corporation tax instalments", band: "#CFD4E7", integrations: ["sheets", "docs", "itax"] },
 ];
 
-// Mock data array removed as requested
 const initialWorkflows: WorkflowItem[] = [];
 
 const statusMeta: Record<WfStatus, { label: string; cls: string }> = {
@@ -91,34 +93,101 @@ const PIN_FORMAT = /^[AP]\d{9}[A-Z]$/;
 const maskPin = (pin: string) => `${pin.slice(0, 3)}•••••••${pin.slice(-1)}`;
 const money = (n: number) => `KSh ${n.toLocaleString("en-KE")}`;
 
+// Palette: warm paper, one ink colour, one quiet green accent.
+const INK = "#0B1B36";
+const PAPER = "#FBFAF8";
+const LINE = "#E6E2DB";
+const MUTED = "#6F6A62";
+
+// Rank templates against free text the person typed
+function matchTemplates(text: string) {
+  const q = text.trim().toLowerCase();
+  if (q.length < 2) return [];
+  return TEMPLATES.map((t) => {
+    let score = 0;
+    if (t.name.toLowerCase().includes(q) || t.service.toLowerCase().includes(q)) score += 3;
+    t.keywords.forEach((k) => {
+      if (q.includes(k)) score += 2;
+      else if (k.includes(q)) score += 1;
+    });
+    q.split(/\s+/).forEach((w) => {
+      if (w.length > 2 && t.keywords.some((k) => k.includes(w))) score += 1;
+    });
+    return { t, score };
+  })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((x) => x.t);
+}
+
 // --------------------------------------------------
 // Main Component
 // --------------------------------------------------
 
-export default function WorkflowsPage({ onGoToPricing }: { onGoToPricing?: () => void }) {
+export default function WorkflowsPage({
+  onGoToPricing,
+  onLinkPin,
+  userName = "Sam",
+}: {
+  onGoToPricing?: () => void;
+  onLinkPin?: () => void;
+  userName?: string;
+}) {
   const [workflows, setWorkflows] = useState<WorkflowItem[]>(initialWorkflows);
-  const [tab, setTab] = useState<Tab>("templates");
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
+  const [tab, setTab] = useState<Tab>("all");
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [prompt, setPrompt] = useState("");
+  const [promptFocused, setPromptFocused] = useState(false);
+  const [promoHidden, setPromoHidden] = useState(false);
+  const [rail, setRail] = useState({ left: false, right: true });
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
 
-  // Simulate page refresh loading for all cards
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500); 
+    const timer = setTimeout(() => setIsLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Page state: 'list' or 'setup'
+  function updateRail() {
+    const el = railRef.current;
+    if (!el) return;
+    setRail({
+      left: el.scrollLeft > 8,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 8,
+    });
+  }
+  useEffect(() => {
+    updateRail();
+    window.addEventListener("resize", updateRail);
+    return () => window.removeEventListener("resize", updateRail);
+  }, [isLoading, promoHidden]);
+
+  function scrollRail(dir: 1 | -1) {
+    railRef.current?.scrollBy({ left: dir * 640, behavior: "smooth" });
+  }
+
   const [view, setView] = useState<"list" | "setup">("list");
   const [setupData, setSetupData] = useState<{ templateId: string; editingId?: string } | null>(null);
+
+  const promptMatches = useMemo(() => matchTemplates(prompt), [prompt]);
 
   // ---- Actions ----
   function startSetup(templateId: string, wf?: WorkflowItem) {
     setSetupData({ templateId, editingId: wf?.id });
     setView("setup");
+  }
+
+  function submitPrompt() {
+    if (!prompt.trim()) return;
+    if (promptMatches.length > 0) {
+      startSetup(promptMatches[0].id);
+      setPrompt("");
+    } else {
+      setNotice("We couldn't match that to a tax automation. Try a tax type such as VAT, PAYE or nil returns, or pick from the templates below.");
+      railRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 
   function handleSaveSetup(status: WfStatus, formData: any) {
@@ -149,9 +218,9 @@ export default function WorkflowsPage({ onGoToPricing }: { onGoToPricing?: () =>
   // --------------------------------------------------
   if (view === "setup" && setupData) {
     return (
-      <WorkflowSetup 
+      <WorkflowSetup
         templateId={setupData.templateId}
-        editingWorkflow={workflows.find(w => w.id === setupData.editingId)}
+        editingWorkflow={workflows.find((w) => w.id === setupData.editingId)}
         existingWorkflows={workflows}
         onCancel={() => { setView("list"); setSetupData(null); }}
         onSave={handleSaveSetup}
@@ -166,151 +235,337 @@ export default function WorkflowsPage({ onGoToPricing }: { onGoToPricing?: () =>
     tab === "active" ? w.status === "active" : tab === "drafts" ? w.status === "draft" : true
   );
 
-  const gallery = GALLERY.filter(
-    (g) => (category === "all" || g.templateId === category) && g.title.toLowerCase().includes(query.trim().toLowerCase())
-  );
+  const showDropdown = promptFocused && promptMatches.length > 0;
+
+  const scratch = [
+    { icon: WorkflowIcon, title: "Workflow", sub: "Automated tax filing", onClick: () => railRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }) },
+    { icon: MessageSquare, title: "Solara AI", sub: "Describe it, we set it up", onClick: () => promptRef.current?.focus() },
+    { icon: BellRing, title: "Reminders", sub: "Coming soon", disabled: true },
+    { icon: FileText, title: "Document request", sub: "Coming soon", disabled: true },
+  ];
 
   return (
-    <div className="space-y-8 rounded-2xl bg-[#F7F9F8]">
-      {/* Intro */}
-      <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Workflows</h1>
-          <p className="mt-2 text-sm text-slate-500">Create and manage your tax automations.</p>
+    <div className="space-y-12 rounded-2xl pb-10" style={{ backgroundColor: PAPER }}>
+      {/* ---------------- Hero ---------------- */}
+      <section className="relative px-4 pt-14 sm:pt-16">
+        {/* faint dot field that fades out toward the edges */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage: "radial-gradient(rgba(11,27,54,0.16) 1px, transparent 1px)",
+            backgroundSize: "14px 14px",
+            WebkitMaskImage: "radial-gradient(ellipse 60% 70% at 50% 45%, #000 10%, transparent 75%)",
+            maskImage: "radial-gradient(ellipse 60% 70% at 50% 45%, #000 10%, transparent 75%)",
+          }}
+        />
+
+        <div className="relative mx-auto max-w-[750px]">
+          <h1 className="text-center text-[28px] font-medium tracking-[-0.01em] sm:text-[32px]" style={{ color: INK }}>
+            Hi {userName}, what are we automating?
+          </h1>
+          <p className="mt-3 text-center text-sm" style={{ color: MUTED }}>
+            Describe your idea and <span className="font-semibold" style={{ color: "#1E6B4F" }}>Solara AI</span>, your coworker, will build it for you.
+          </p>
+
+          <div className="relative mt-8">
+            <div
+              className="rounded-md bg-white shadow-[0_1px_2px_rgba(11,27,54,0.05)] transition-colors focus-within:border-[#0B1B36]"
+              style={{ border: `1px solid #D8D3CB` }}
+            >
+              <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${LINE}` }}>
+                <span className="flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: INK }}>
+                  <WorkflowIcon size={12} className="text-white" />
+                </span>
+                <span className="text-sm font-semibold" style={{ color: INK }}>Solara AI</span>
+              </div>
+
+              <textarea
+                ref={promptRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onFocus={() => setPromptFocused(true)}
+                onBlur={() => setTimeout(() => setPromptFocused(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submitPrompt();
+                  }
+                }}
+                rows={3}
+                placeholder="Enter a tax type or describe what to file, e.g. monthly rental income"
+                className="block w-full resize-none bg-transparent px-3 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#8B867D]"
+              />
+
+              <div className="flex justify-end px-3 pb-3">
+                <button
+                  onClick={submitPrompt}
+                  disabled={!prompt.trim()}
+                  aria-label="Start automation"
+                  className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#ECE8E1] disabled:text-[#A29D93]"
+                  style={{ backgroundColor: INK }}
+                >
+                  <ArrowUp size={15} />
+                </button>
+              </div>
+            </div>
+
+            {showDropdown && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1.5 overflow-hidden rounded-md bg-white shadow-lg" style={{ border: `1px solid ${LINE}` }}>
+                {promptMatches.map((t, i) => (
+                  <button
+                    key={t.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { startSetup(t.id); setPrompt(""); }}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F6F4F0]"
+                    style={i > 0 ? { borderTop: `1px solid ${LINE}` } : undefined}
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold" style={{ color: INK }}>{t.name}</span>
+                      <span className="block text-xs" style={{ color: MUTED }}>{t.schedule}</span>
+                    </span>
+                    <ArrowRight size={15} style={{ color: MUTED }} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <p className="mt-3 text-center text-xs" style={{ color: MUTED }}>
+            Solara AI can make mistakes. Please double-check before you activate anything.
+          </p>
         </div>
-        <button onClick={() => setTab("templates")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0B1B36] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-          <Plus size={18} /> Create workflow
-        </button>
       </section>
 
       {notice && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <span className="flex items-center gap-2"><CheckCircle2 size={17} />{notice}</span>
-          <button onClick={() => setNotice(null)} aria-label="Dismiss"><X size={16} /></button>
+        <div className="mx-auto flex max-w-[750px] items-center justify-between gap-3 rounded-md px-4 py-3 text-sm" style={{ backgroundColor: "#EEF3EF", border: "1px solid #D5E2D8", color: "#1E4D36" }}>
+          <span className="flex items-center gap-2"><CheckCircle2 size={16} className="shrink-0" />{notice}</span>
+          <button onClick={() => setNotice(null)} aria-label="Dismiss"><X size={15} /></button>
         </div>
       )}
 
-      {/* Tabs */}
-      <section>
-        <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
-          {([["templates", "Templates"], ["all", "All workflows"], ["active", "Active"], ["drafts", "Drafts"]] as [Tab, string][]).map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${tab === id ? "border-[#0B1B36] text-[#0B1B36]" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+      {/* ---------------- Start from scratch ---------------- */}
+      <section className="px-1">
+        <h2 className="text-[17px] font-semibold" style={{ color: INK }}>Start from scratch</h2>
+        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {scratch.map((s) => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.title}
+                onClick={s.onClick}
+                disabled={s.disabled}
+                className="flex items-center gap-3 rounded-md bg-white px-4 py-4 text-left transition hover:border-[#C7C1B6] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[#E6E2DB]"
+                style={{ border: `1px solid ${LINE}` }}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ backgroundColor: "#E6EEE8", color: "#1E6B4F" }}>
+                  <Icon size={18} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold" style={{ color: INK }}>{s.title}</span>
+                  <span className="block text-[13px] leading-snug" style={{ color: MUTED }}>{s.sub}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ---------------- Made for your obligations (carousel) ---------------- */}
+      <section className="px-1">
+        <h2 className="text-[17px] font-semibold" style={{ color: INK }}>Made for your tax obligations</h2>
+
+        <div className="relative mt-4">
+          <div
+            ref={railRef}
+            onScroll={updateRail}
+            className="flex snap-x gap-4 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {/* Promo card */}
+            {!promoHidden && (
+              <div className="flex w-[300px] shrink-0 snap-start flex-col rounded-md bg-white p-5" style={{ border: `1px solid ${LINE}` }}>
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: INK }}>
+                  <Landmark size={20} className="text-white" />
+                </span>
+                <h3 className="mt-5 text-[17px] font-semibold leading-snug" style={{ color: INK }}>Show only what applies to you</h3>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: MUTED }}>
+                  Link your KRA PIN and we will highlight the automations that match your registered obligations.
+                </p>
+                <div className="mt-5 flex items-center gap-4">
+                  <button
+                    onClick={() => (onLinkPin ? onLinkPin() : setNotice("KRA PIN linking is not connected yet."))}
+                    className="inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    style={{ backgroundColor: INK }}
+                  >
+                    Link KRA PIN <ArrowRight size={15} />
+                  </button>
+                  <button onClick={() => setPromoHidden(true)} className="text-sm" style={{ color: MUTED }}>Not now</button>
+                </div>
+                <p className="mt-auto flex items-center gap-2 pt-6 text-[13px]" style={{ color: MUTED }}>
+                  <Lock size={14} /> Takes 2 minutes · unlink anytime
+                </p>
+              </div>
+            )}
+
+            {/* Template cards */}
+            {GALLERY.map((g) => {
+              const svc = TEMPLATES.find((t) => t.id === g.templateId)!;
+
+              if (isLoading) {
+                return (
+                  <div key={g.id} className="w-[300px] shrink-0 snap-start overflow-hidden rounded-md bg-white" style={{ border: `1px solid ${LINE}` }}>
+                    <div className="h-[134px] animate-pulse bg-[#ECE8E1]" />
+                    <div className="animate-pulse p-4">
+                      <div className="h-4 w-11/12 rounded bg-[#ECE8E1]" />
+                      <div className="mt-2 h-4 w-2/3 rounded bg-[#ECE8E1]" />
+                      <div className="mt-5 h-3 w-1/2 rounded bg-[#ECE8E1]" />
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => startSetup(g.templateId)}
+                  className="group w-[300px] shrink-0 snap-start overflow-hidden rounded-md bg-white text-left transition hover:border-[#C7C1B6] hover:shadow-[0_4px_14px_rgba(11,27,54,0.07)]"
+                  style={{ border: `1px solid ${LINE}` }}
+                >
+                  <div
+                    className="flex h-[134px] items-center justify-center"
+                    style={{
+                      backgroundColor: g.band,
+                      backgroundImage:
+                        "linear-gradient(rgba(255,255,255,0.32) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.32) 1px, transparent 1px)",
+                      backgroundSize: "16px 16px",
+                    }}
+                  >
+                    <div className="flex items-center gap-2 rounded-lg bg-white p-2 shadow-[0_1px_3px_rgba(11,27,54,0.08)]">
+                      {g.integrations.filter((k) => k !== "itax").map((k) => {
+                        const Icon = INTEGRATIONS[k].icon;
+                        return (
+                          <span key={k} className="flex h-10 w-10 items-center justify-center rounded-md" style={{ border: `1px solid ${LINE}` }}>
+                            <Icon size={19} className={INTEGRATIONS[k].color} />
+                          </span>
+                        );
+                      })}
+                      <ArrowRight size={15} className="mx-0.5" style={{ color: MUTED }} />
+                      <span className="flex h-10 w-10 items-center justify-center rounded-md" style={{ backgroundColor: INK }}>
+                        <Landmark size={19} className="text-white" />
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className="min-h-[2.75rem] text-[17px] font-semibold leading-snug" style={{ color: INK }}>{g.headline}</h3>
+                    <div className="mt-3 flex items-center gap-1.5 text-[13px]" style={{ color: MUTED }}>
+                      <CalendarClock size={14} />{svc.schedule}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* edge fade + arrows */}
+          {rail.right && (
+            <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-20" style={{ background: `linear-gradient(to right, transparent, ${PAPER})` }} />
+          )}
+          {rail.left && (
+            <button
+              onClick={() => scrollRail(-1)}
+              aria-label="Scroll left"
+              className="absolute left-0 top-[67px] z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-md transition hover:bg-[#F6F4F0]"
+              style={{ border: `1px solid ${LINE}`, color: INK }}
+            >
+              <ChevronLeft size={18} />
+            </button>
+          )}
+          {rail.right && (
+            <button
+              onClick={() => scrollRail(1)}
+              aria-label="Scroll right"
+              className="absolute right-0 top-[67px] z-10 flex h-9 w-9 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-md transition hover:bg-[#F6F4F0]"
+              style={{ border: `1px solid ${LINE}`, color: INK }}
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ---------------- Your workflows ---------------- */}
+      <section className="px-1">
+        <h2 className="text-[17px] font-semibold" style={{ color: INK }}>Your workflows</h2>
+
+        <div className="mt-3 flex gap-6" style={{ borderBottom: `1px solid ${LINE}` }}>
+          {([["all", "All"], ["active", "Active"], ["drafts", "Drafts"]] as [Tab, string][]).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className="-mb-px border-b-2 py-2.5 text-sm font-medium transition"
+              style={tab === id ? { borderColor: INK, color: INK } : { borderColor: "transparent", color: MUTED }}
+            >
               {label}
             </button>
           ))}
         </div>
 
-        {/* Workflows List */}
-        {tab !== "templates" && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            {visible.length === 0 ? (
-              <div className="p-10 text-center">
-                <p className="font-semibold text-slate-800">No workflows here yet</p>
-                <p className="mt-1 text-sm text-slate-500">Start from a template to create your first automation.</p>
-                <button onClick={() => setTab("templates")} className="mt-4 rounded-lg bg-[#0B1B36] px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Browse templates</button>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {visible.map((w) => {
-                  const meta = statusMeta[w.status];
-                  return (
-                    <div key={w.id} className="flex flex-col gap-4 p-5 transition hover:bg-slate-50 md:flex-row md:items-center md:justify-between">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><WorkflowIcon size={20} /></div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800">{w.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{w.pin ? `KRA PIN: ${maskPin(w.pin)}` : "KRA account not linked"} · {w.frequency}</p>
-                          {w.note && <p className={`mt-1 text-xs ${w.status === "attention" ? "text-red-600" : "text-amber-700"}`}>{w.note}</p>}
-                          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400"><Clock3 size={12} /> Last run: {w.lastRun} · Next run: {w.nextRun}</p>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>
-                        {w.status === "active" && <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white">Manage</button>}
-                        {w.status === "draft" && <button onClick={() => startSetup(w.templateId, w)} className="rounded-lg bg-[#0B1B36] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Continue setup</button>}
-                        {w.status === "attention" && <button onClick={onGoToPricing} className="rounded-lg bg-[#0B1B36] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Renew service</button>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Templates */}
-        {tab === "templates" && (
-          <div className="mt-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="relative lg:w-80">
-                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search templates" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#0B1B36]" />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[{ id: "all", name: "All" }, ...TEMPLATES].map((c) => (
-                  <button key={c.id} onClick={() => setCategory(c.id)} className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${category === c.id ? "bg-[#0B1B36] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>{c.name}</button>
-                ))}
-              </div>
+        <div className="mt-4 overflow-hidden rounded-md bg-white" style={{ border: `1px solid ${LINE}` }}>
+          {visible.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-sm font-semibold" style={{ color: INK }}>Nothing here yet</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm" style={{ color: MUTED }}>
+                Describe what you need in the box above or pick a template to set up your first automation.
+              </p>
+              <button
+                onClick={() => railRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                className="mt-4 rounded px-4 py-2 text-sm font-semibold transition hover:bg-[#F6F4F0]"
+                style={{ border: `1px solid #D8D3CB`, color: INK }}
+              >
+                Browse templates
+              </button>
             </div>
-
-            {gallery.length === 0 ? (
-              <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">No templates match your search.</div>
-            ) : (
-              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {gallery.map((g) => {
-                  const svc = TEMPLATES.find((t) => t.id === g.templateId)!;
-                  const shown = g.integrations.slice(0, 3);
-                  const extra = g.integrations.length - shown.length;
-
-                  if (isLoading) {
-                    return (
-                      <div key={g.id} className="flex flex-col overflow-hidden rounded-lg bg-[#EEEEEE]">
-                        <div className="flex flex-1 flex-col p-5 animate-pulse">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="h-6 w-3/4 rounded bg-slate-300"></div>
-                          </div>
-                          <div className="mt-3 h-4 w-full rounded bg-slate-300"></div>
-                          <div className="mt-1.5 h-4 w-5/6 rounded bg-slate-300"></div>
-                          <div className="mt-4 h-3 w-1/2 rounded bg-slate-300"></div>
-                          <div className="mt-2 h-3 w-2/3 rounded bg-slate-300"></div>
-                        </div>
-                        <div className="border-t border-black/5 p-5">
-                          <div className="h-4 w-1/3 rounded bg-slate-300 animate-pulse"></div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={g.id} className="flex flex-col overflow-hidden rounded-lg bg-[#EEEEEE] transition hover:bg-[#E6E6E6]">
-                      <div className="flex flex-1 flex-col p-5">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="text-xl font-bold text-slate-900">{svc.name}</h3>
-                        </div>
-                        <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{g.title}</p>
-                        <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500"><CalendarClock size={13} className="text-slate-400" />{svc.schedule}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">Connects {shown.map((k) => INTEGRATIONS[k].label).join(", ")}{extra > 0 && ` and ${extra} more`}</p>
-                      </div>
-                      <div className="border-t border-black/5">
-                        <button onClick={() => startSetup(g.templateId)} className="flex w-full items-center justify-between px-5 py-2.5 text-sm font-medium text-[#0B1B36] transition hover:bg-black/5">
-                          Set up automation
-                          <ArrowRight size={16} />
-                        </button>
+          ) : (
+            <div>
+              {visible.map((w, i) => {
+                const meta = statusMeta[w.status];
+                return (
+                  <div
+                    key={w.id}
+                    className="flex flex-col gap-4 p-5 transition hover:bg-[#FAF9F6] md:flex-row md:items-center md:justify-between"
+                    style={i > 0 ? { borderTop: `1px solid ${LINE}` } : undefined}
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md" style={{ backgroundColor: "#E6EEE8", color: "#1E6B4F" }}>
+                        <WorkflowIcon size={18} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold" style={{ color: INK }}>{w.name}</p>
+                        <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>{w.pin ? `KRA PIN ${maskPin(w.pin)}` : "KRA account not linked"} · {w.frequency}</p>
+                        {w.note && <p className={`mt-1 text-xs ${w.status === "attention" ? "text-red-600" : "text-amber-700"}`}>{w.note}</p>}
+                        <p className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: MUTED }}><Clock3 size={12} /> Last run {w.lastRun} · Next run {w.nextRun}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>
+                      {w.status === "active" && <button className="rounded px-4 py-2 text-sm font-semibold transition hover:bg-[#F6F4F0]" style={{ border: "1px solid #D8D3CB", color: INK }}>Manage</button>}
+                      {w.status === "draft" && <button onClick={() => startSetup(w.templateId, w)} className="rounded px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: INK }}>Continue setup</button>}
+                      {w.status === "attention" && <button onClick={onGoToPricing} className="rounded px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: INK }}>Renew service</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
 }
 
 // --------------------------------------------------
-// Setup Page Component (Full Screen Overlay)
+// Setup Page Component (Full Screen Overlay) - unchanged
 // --------------------------------------------------
 
 function WorkflowSetup({
@@ -327,8 +582,7 @@ function WorkflowSetup({
   onSave: (status: WfStatus, form: any) => void;
 }) {
   const tpl = TEMPLATES.find((t) => t.id === templateId)!;
-  
-  // Step State
+
   const [currentStep, setCurrentStep] = useState(1);
   const STEPS = [
     { num: 1, label: "Automation Details" },
@@ -353,7 +607,6 @@ function WorkflowSetup({
   const usedPins = existingWorkflows.filter((w) => w.id !== editingWorkflow?.id && w.pin).map((w) => w.pin as string);
   const pinTaken = usedPins.includes(newPinUpper);
 
-  // Action: Verify KRA PIN
   function handleVerifyPin() {
     setPinError(null);
     if (!PIN_FORMAT.test(newPinUpper)) {
@@ -366,34 +619,26 @@ function WorkflowSetup({
     }
 
     setIsVerifying(true);
-    // Simulate API Call to KRA
     setTimeout(() => {
       setIsVerifying(false);
-      
-      // MOCK LOGIC: If PIN ends with 'Z', simulate mismatch for Nil Returns
       const mockObligation = newPinUpper.endsWith("Z") ? "VAT" : "Nil Returns";
-      
       setVerifiedData({
         pin: newPinUpper,
         firstName: "John",
         middleName: "M.",
         surname: "Doe",
         obligation: mockObligation,
-        matches: mockObligation === tpl.obligation // Using tpl.obligation for matching
+        matches: mockObligation === tpl.obligation,
       });
       setHasVerified(true);
     }, 1500);
   }
 
-  // Action: Process Payment
   function handleProcessPayment() {
     setIsProcessingPayment(true);
-    // Simulate Payment API
     setTimeout(() => {
       setIsProcessingPayment(false);
       setPaymentSuccess(true);
-      
-      // Auto submit after short delay so user sees the success state
       setTimeout(() => {
         onSave("active", { pin: newPinUpper, mode: "auto" });
       }, 1500);
@@ -404,7 +649,6 @@ function WorkflowSetup({
 
   return (
     <div className="fixed inset-0 z-[100] flex bg-white">
-      
       {/* LEFT SIDEBAR - Progress Nav */}
       <div className="hidden w-64 flex-col border-r border-slate-200 bg-[#F8FAFC] md:flex">
         <div className="p-6 border-b border-slate-200">
@@ -431,12 +675,8 @@ function WorkflowSetup({
 
       {/* RIGHT MAIN CONTENT */}
       <div className="flex flex-1 flex-col overflow-y-auto">
-        
-        {/* Top Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-8 py-4 bg-white sticky top-0 z-10">
-          <h1 className="text-lg font-semibold text-slate-800">
-            {tpl.name}
-          </h1>
+          <h1 className="text-lg font-semibold text-slate-800">{tpl.name}</h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500">Step {currentStep} / {STEPS.length}</span>
             <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -445,16 +685,12 @@ function WorkflowSetup({
           </div>
         </div>
 
-        {/* Form Body */}
         <div className="mx-auto w-full max-w-3xl px-8 py-10 pb-32">
-          
-          {/* STEP 1: INSTRUCTIONS */}
+          {/* STEP 1 */}
           {currentStep === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-4">
-                  {tpl.name} Setup Instructions
-                </h2>
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-4">{tpl.name} Setup Instructions</h2>
                 <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-800 leading-relaxed">
                   Review the instructions carefully before proceeding. You will be asked to verify your KRA PIN and configure submission preferences in the next steps.
                 </div>
@@ -513,11 +749,9 @@ function WorkflowSetup({
             </div>
           )}
 
-          {/* STEP 2: PIN VERIFICATION */}
+          {/* STEP 2 */}
           {currentStep === 2 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              
-              {/* Error Banner for Mismatch */}
               {hasVerified && !verifiedData.matches && (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3 text-red-800 shadow-sm">
                   <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -536,7 +770,6 @@ function WorkflowSetup({
               </div>
 
               <section className="space-y-6">
-                {/* Account Type */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Account Type</label>
                   <div className="flex gap-4">
@@ -553,7 +786,6 @@ function WorkflowSetup({
                   </div>
                 </div>
 
-                {/* PIN Input */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Enter KRA PIN</label>
                   <div className="flex gap-3">
@@ -572,17 +804,15 @@ function WorkflowSetup({
                       {isVerifying ? <Loader2 size={18} className="animate-spin" /> : "Verify PIN"}
                     </button>
                   </div>
-                  {pinError && <p className="mt-2 text-sm text-red-600 flex items-center gap-1"><AlertCircle size={14}/> {pinError}</p>}
+                  {pinError && <p className="mt-2 text-sm text-red-600 flex items-center gap-1"><AlertCircle size={14} /> {pinError}</p>}
                 </div>
 
-                {/* Auto-filled Data */}
                 {hasVerified && verifiedData && (
                   <div className="rounded-xl border border-slate-200 bg-[#F8FAFC] p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex items-center gap-2 text-emerald-700 font-semibold text-sm mb-2">
                       <CheckCircle2 size={18} />
                       PIN verified successfully via iTax
                     </div>
-                    
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-slate-500 mb-1">First Name</p>
@@ -609,7 +839,7 @@ function WorkflowSetup({
             </div>
           )}
 
-          {/* STEP 3: PAYMENT */}
+          {/* STEP 3 */}
           {currentStep === 3 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
@@ -680,7 +910,6 @@ function WorkflowSetup({
               )}
             </div>
           )}
-
         </div>
 
         {/* Footer Action Bar */}
@@ -695,10 +924,7 @@ function WorkflowSetup({
                 Back
               </button>
             ) : (
-              <button
-                onClick={onCancel}
-                className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
-              >
+              <button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100">
                 Cancel
               </button>
             )}
@@ -706,10 +932,7 @@ function WorkflowSetup({
 
           <div className="flex items-center gap-3">
             {currentStep === 1 && (
-              <button
-                disabled
-                className="rounded-xl bg-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-500 cursor-not-allowed shadow-sm"
-              >
+              <button disabled className="rounded-xl bg-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-500 cursor-not-allowed shadow-sm">
                 Coming Soon
               </button>
             )}
@@ -736,9 +959,7 @@ function WorkflowSetup({
                     Processing Payment...
                   </>
                 ) : (
-                  <>
-                    Pay {money(tpl.price)} & Activate
-                  </>
+                  <>Pay {money(tpl.price)} & Activate</>
                 )}
               </button>
             )}
