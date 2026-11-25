@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Copy,
   FileSpreadsheet,
   FileText,
   FolderOpen,
@@ -19,6 +20,8 @@ import {
   Mail,
   MessageSquare,
   Smartphone,
+  ThumbsDown,
+  ThumbsUp,
   Workflow as WorkflowIcon,
   X,
   AlertCircle,
@@ -122,6 +125,262 @@ function matchTemplates(text: string) {
 }
 
 // --------------------------------------------------
+// Assistant chat (opens when the person submits an idea)
+// --------------------------------------------------
+
+type Reply = {
+  intro: string;
+  bullets?: string[];
+  notesTitle?: string;
+  notes?: string[];
+  outro?: string;
+  templates?: typeof TEMPLATES;
+  steps: string[];
+};
+type ChatMsg = { id: number; role: "user" | "assistant"; text: string; reply?: Reply; seconds?: number };
+
+function buildReply(text: string): Reply {
+  const matches = matchTemplates(text);
+
+  if (matches.length === 0) {
+    return {
+      intro: "I can help you automate a tax filing. Before I outline it, which tax should it handle? For example:",
+      bullets: [
+        "File monthly nil returns when you have no income to declare",
+        "Calculate VAT or turnover tax from your sales records",
+        "Prepare PAYE from a payroll sheet",
+        "File rental income or withholding tax on a schedule",
+      ],
+      outro: "Tell me the tax type, and whether you want each return reviewed before it is filed or filed automatically, and I'll outline the workflow.",
+      steps: ["Read your request", `Checked it against ${TEMPLATES.length} tax automations`, "Needed more detail to pick one"],
+    };
+  }
+
+  const top = matches[0];
+  const notes = [
+    "You verify your KRA PIN with iTax before anything is filed.",
+    "Every workflow needs your authorization to file on your behalf. Manual filing isn't supported.",
+  ];
+  if (top.serviceStatus === "expired") {
+    notes.unshift(`Your ${top.service} service has expired. Renew it before this workflow can run.`);
+  }
+
+  return {
+    intro: `I can help you automate ${top.service}. Here's what I'd set up:`,
+    bullets: [
+      `Schedule: ${top.schedule}`,
+      `Connects: ${top.integrations.map((k) => INTEGRATIONS[k].label).join(", ")}`,
+      `Needs: a KRA PIN registered for ${top.obligation}`,
+    ],
+    notesTitle: "A few notes:",
+    notes,
+    outro: "Start the setup below, or tell me what you'd like to change first.",
+    templates: matches,
+    steps: ["Read your request", `Checked it against ${TEMPLATES.length} tax automations`, `Matched it to ${top.name}`, "Prepared the setup outline"],
+  };
+}
+
+function replyToText(r: Reply) {
+  return [r.intro, ...(r.bullets ?? []).map((b) => `- ${b}`), r.notesTitle, ...(r.notes ?? []).map((n) => `- ${n}`), r.outro]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function renderBullet(b: string) {
+  const i = b.indexOf(": ");
+  if (i > 0 && i < 14) return (<><strong className="font-semibold">{b.slice(0, i)}</strong>: {b.slice(i + 2)}</>);
+  return b;
+}
+
+function AssistantChat({
+  initialPrompt,
+  onBack,
+  onStartSetup,
+}: {
+  initialPrompt: string;
+  onBack: () => void;
+  onStartSetup: (templateId: string) => void;
+}) {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [pending, setPending] = useState(false);
+  const [input, setInput] = useState("");
+  const [open, setOpen] = useState<Record<number, boolean>>({});
+  const [vote, setVote] = useState<Record<number, "up" | "down" | null>>({});
+  const [copied, setCopied] = useState<number | null>(null);
+  const idRef = useRef(0);
+  const started = useRef(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  function send(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    const uid = ++idRef.current;
+    setMessages((m) => [...m, { id: uid, role: "user", text: t }]);
+    setPending(true);
+    const seconds = 2 + Math.floor(Math.random() * 3);
+    setTimeout(() => {
+      const reply = buildReply(t);
+      const aid = ++idRef.current;
+      setMessages((m) => [...m, { id: aid, role: "assistant", text: replyToText(reply), reply, seconds }]);
+      setPending(false);
+    }, seconds * 1000);
+  }
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    send(initialPrompt);
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, pending]);
+
+  function copy(m: ChatMsg) {
+    try { navigator.clipboard?.writeText(m.text); } catch {}
+    setCopied(m.id);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-[790px] flex-col rounded-2xl px-1 pb-4" style={{ backgroundColor: PAPER }}>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 pt-1 text-sm" style={{ color: INK }}>
+        <button onClick={onBack} className="font-medium underline underline-offset-2">Home</button>
+        <ChevronRight size={16} style={{ color: MUTED }} />
+        <span className="font-semibold">Build with Solara AI</span>
+      </nav>
+
+      {/* Header */}
+      <div className="mt-4 flex items-center gap-2 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
+        <span className="flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: INK }}>
+          <WorkflowIcon size={12} className="text-white" />
+        </span>
+        <span className="text-sm font-semibold" style={{ color: INK }}>Solara AI</span>
+      </div>
+
+      {/* Conversation */}
+      <div className="flex-1 space-y-8 px-1 pt-6">
+        {messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m.id} className="flex justify-end">
+              <div className="max-w-[80%] rounded-md px-4 py-2.5 text-[15px]" style={{ backgroundColor: "#EFEBE4", border: `1px solid ${LINE}`, color: INK }}>
+                {m.text}
+              </div>
+            </div>
+          ) : (
+            <div key={m.id}>
+              <button
+                onClick={() => setOpen((o) => ({ ...o, [m.id]: !o[m.id] }))}
+                className="flex items-center gap-1 text-[13px]"
+                style={{ color: MUTED }}
+              >
+                Worked for <strong className="font-semibold">{m.seconds} seconds</strong>
+                <ChevronRight size={14} className={`transition-transform ${open[m.id] ? "rotate-90" : ""}`} />
+              </button>
+              {open[m.id] && (
+                <ul className="ml-1 mt-2 space-y-1 pl-3 text-[13px]" style={{ borderLeft: `2px solid ${LINE}`, color: MUTED }}>
+                  {m.reply!.steps.map((st) => (<li key={st}>{st}</li>))}
+                </ul>
+              )}
+
+              <div className="mt-6 text-[15px] leading-relaxed" style={{ color: "#2A2F3A" }}>
+                <p>{m.reply!.intro}</p>
+                {m.reply!.bullets && (
+                  <ul className="mt-3 list-disc space-y-1.5 pl-5 marker:text-[#2A2F3A]">
+                    {m.reply!.bullets.map((b) => (<li key={b}>{renderBullet(b)}</li>))}
+                  </ul>
+                )}
+                {m.reply!.notes && (
+                  <>
+                    <p className="mt-4">{m.reply!.notesTitle}</p>
+                    <ul className="mt-3 list-disc space-y-1.5 pl-5 marker:text-[#2A2F3A]">
+                      {m.reply!.notes.map((n) => (<li key={n}>{n}</li>))}
+                    </ul>
+                  </>
+                )}
+                {m.reply!.outro && <p className="mt-4">{m.reply!.outro}</p>}
+                {m.reply!.templates && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {m.reply!.templates.map((t, i) => (
+                      <button
+                        key={t.id}
+                        onClick={() => onStartSetup(t.id)}
+                        className={`inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold transition ${i === 0 ? "text-white hover:opacity-90" : "hover:bg-[#F6F4F0]"}`}
+                        style={i === 0 ? { backgroundColor: INK } : { border: "1px solid #D8D3CB", color: INK }}
+                      >
+                        Set up {t.name.replace("Automate ", "")} <ArrowRight size={15} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center gap-3" style={{ color: MUTED }}>
+                <button onClick={() => copy(m)} aria-label="Copy reply" className="transition hover:text-[#0B1B36]">
+                  {copied === m.id ? <Check size={15} /> : <Copy size={15} />}
+                </button>
+                <button
+                  onClick={() => setVote((v) => ({ ...v, [m.id]: v[m.id] === "up" ? null : "up" }))}
+                  aria-label="Good reply"
+                  className={`transition hover:text-[#0B1B36] ${vote[m.id] === "up" ? "text-[#0B1B36]" : ""}`}
+                >
+                  <ThumbsUp size={15} />
+                </button>
+                <button
+                  onClick={() => setVote((v) => ({ ...v, [m.id]: v[m.id] === "down" ? null : "down" }))}
+                  aria-label="Bad reply"
+                  className={`transition hover:text-[#0B1B36] ${vote[m.id] === "down" ? "text-[#0B1B36]" : ""}`}
+                >
+                  <ThumbsDown size={15} />
+                </button>
+              </div>
+            </div>
+          )
+        )}
+
+        {pending && (
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: MUTED }}>
+            <Loader2 size={14} className="animate-spin" /> Working…
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {/* Input */}
+      <div className="sticky bottom-4 mt-8">
+        <div className="rounded-md bg-white" style={{ border: `2px solid ${INK}` }}>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (!pending && input.trim()) { send(input); setInput(""); }
+              }
+            }}
+            rows={3}
+            placeholder="Chat with Solara AI"
+            className="block w-full resize-none bg-transparent px-3.5 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#8B867D]"
+          />
+          <div className="flex justify-end px-3 pb-3">
+            <button
+              onClick={() => { if (!pending && input.trim()) { send(input); setInput(""); } }}
+              disabled={pending || !input.trim()}
+              aria-label="Send"
+              className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#ECE8E1] disabled:text-[#A29D93]"
+              style={{ backgroundColor: INK }}
+            >
+              <ArrowUp size={15} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------
 // Main Component
 // --------------------------------------------------
 
@@ -168,7 +427,7 @@ export default function WorkflowsPage({
     railRef.current?.scrollBy({ left: dir * 640, behavior: "smooth" });
   }
 
-  const [view, setView] = useState<"list" | "setup">("list");
+  const [chatPrompt, setChatPrompt] = useState<string | null>(null);
   const [setupData, setSetupData] = useState<{ templateId: string; editingId?: string } | null>(null);
 
   const promptMatches = useMemo(() => matchTemplates(prompt), [prompt]);
@@ -176,18 +435,12 @@ export default function WorkflowsPage({
   // ---- Actions ----
   function startSetup(templateId: string, wf?: WorkflowItem) {
     setSetupData({ templateId, editingId: wf?.id });
-    setView("setup");
   }
 
   function submitPrompt() {
     if (!prompt.trim()) return;
-    if (promptMatches.length > 0) {
-      startSetup(promptMatches[0].id);
-      setPrompt("");
-    } else {
-      setNotice("We couldn't match that to a tax automation. Try a tax type such as VAT, PAYE or nil returns, or pick from the templates below.");
-      railRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    setChatPrompt(prompt.trim());
+    setPrompt("");
   }
 
   function handleSaveSetup(status: WfStatus, formData: any) {
@@ -207,24 +460,38 @@ export default function WorkflowsPage({
     setWorkflows((prev) =>
       setupData?.editingId ? prev.map((w) => (w.id === setupData.editingId ? item : w)) : [...prev, item]
     );
-    setView("list");
+    setChatPrompt(null);
     setSetupData(null);
     setTab(status === "active" ? "active" : "drafts");
     setNotice(status === "active" ? `${item.name} is now active.` : `${item.name} saved as a draft.`);
   }
 
   // --------------------------------------------------
-  // Render: Setup View
+  // Render: Setup overlay (sits on top of whichever screen is open)
   // --------------------------------------------------
-  if (view === "setup" && setupData) {
+  const setupOverlay = setupData ? (
+    <WorkflowSetup
+      templateId={setupData.templateId}
+      editingWorkflow={workflows.find((w) => w.id === setupData.editingId)}
+      existingWorkflows={workflows}
+      onCancel={() => setSetupData(null)}
+      onSave={handleSaveSetup}
+    />
+  ) : null;
+
+  // --------------------------------------------------
+  // Render: Assistant chat
+  // --------------------------------------------------
+  if (chatPrompt !== null) {
     return (
-      <WorkflowSetup
-        templateId={setupData.templateId}
-        editingWorkflow={workflows.find((w) => w.id === setupData.editingId)}
-        existingWorkflows={workflows}
-        onCancel={() => { setView("list"); setSetupData(null); }}
-        onSave={handleSaveSetup}
-      />
+      <>
+        <AssistantChat
+          initialPrompt={chatPrompt}
+          onBack={() => setChatPrompt(null)}
+          onStartSetup={(id) => startSetup(id)}
+        />
+        {setupOverlay}
+      </>
     );
   }
 
@@ -245,6 +512,8 @@ export default function WorkflowsPage({
   ];
 
   return (
+    <>
+    {setupOverlay}
     <div className="space-y-12 rounded-2xl pb-10" style={{ backgroundColor: PAPER }}>
       {/* ---------------- Hero ---------------- */}
       <section className="relative px-4 pt-14 sm:pt-16">
@@ -561,6 +830,7 @@ export default function WorkflowsPage({
         </div>
       </section>
     </div>
+    </>
   );
 }
 
