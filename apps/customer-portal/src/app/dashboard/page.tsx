@@ -100,6 +100,9 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Profile completion banner
+  const [bannerOpen, setBannerOpen] = useState(true);
+
   // Real User State
   const [user, setUser] = useState<any>(null);
 
@@ -110,27 +113,27 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch('/api/auth/me');
-        
+        const res = await fetch("/api/auth/me");
+
         if (res.status === 401) {
           // Session expired or invalid, kick to login
-          router.replace('/login');
+          router.replace("/login");
           return;
         }
 
         const data = await res.json();
-        
+
         if (data.success && data.data) {
           setUser(data.data);
           // Set account type based on backend response
-          if (data.data.account_type === 'Business') {
+          if (data.data.account_type === "Business") {
             setCurrentAccount("Business Account");
           } else {
             setCurrentAccount("Individual Account");
           }
         }
       } catch (error) {
-        console.error('Failed to fetch user session:', error);
+        console.error("Failed to fetch user session:", error);
       } finally {
         // Artificial delay just to show the skeleton for a moment
         setTimeout(() => setIsLoading(false), 800);
@@ -150,20 +153,26 @@ export default function DashboardPage() {
 
   async function handleSignOut() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch("/api/auth/logout", { method: "POST" });
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     } finally {
-      router.replace('/login');
+      router.replace("/login");
       router.refresh();
     }
   }
 
   // Get display name from backend user object
-  const displayName = user?.business_name || user?.first_name || user?.email?.split('@')[0] || "User";
+  const displayName =
+    user?.business_name ||
+    user?.first_name ||
+    user?.email?.split("@")[0] ||
+    "User";
   const userInitial = displayName.charAt(0).toUpperCase();
   const userEmail = user?.email || "user@example.com";
-  const userIdString = user?.merchant_id ? `ID: ${user.merchant_id}` : currentAccount;
+  const userIdString = user?.merchant_id
+    ? `ID: ${user.merchant_id}`
+    : currentAccount;
 
   return (
     <div className="min-h-screen bg-[#F7F9F8] text-slate-800">
@@ -295,6 +304,39 @@ export default function DashboardPage() {
           ${collapsed ? "lg:ml-[76px]" : "lg:ml-[260px]"}
         `}
       >
+        {/* Profile completion banner */}
+        {bannerOpen && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 border-b border-yellow-300 bg-yellow-100 px-4 py-3 sm:px-7"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <AlertCircle size={20} className="shrink-0 text-yellow-700" />
+              <p className="text-xs font-bold uppercase tracking-wide text-yellow-900 sm:text-sm">
+                To start automation, complete your profile
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={() => handleNavigation("Profile")}
+                className="hidden items-center gap-1.5 rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-semibold text-yellow-950 transition hover:bg-yellow-500 sm:inline-flex"
+              >
+                Complete Profile
+                <ArrowRight size={14} />
+              </button>
+
+              <button
+                onClick={() => setBannerOpen(false)}
+                className="rounded-lg p-1.5 text-yellow-800 transition hover:bg-yellow-200"
+                aria-label="Dismiss banner"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-md sm:px-7">
           <div className="flex items-center gap-3">
@@ -437,7 +479,9 @@ export default function DashboardPage() {
                     <p className="text-sm font-semibold text-slate-900 truncate">
                       {displayName}
                     </p>
-                    <p className="text-xs text-slate-400 truncate">{userEmail}</p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {userEmail}
+                    </p>
                   </div>
 
                   <ProfileMenuItem
@@ -508,7 +552,13 @@ export default function DashboardPage() {
 // --------------------------------------------------
 // Dashboard home content
 // --------------------------------------------------
-function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => void; user: any }) {
+function DashboardHome({
+  onNavigate,
+  user,
+}: {
+  onNavigate: (page: string) => void;
+  user: any;
+}) {
   const [openAccountCard, setOpenAccountCard] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(
     linkedAccounts[0] || { name: "No Account", pin: "" }
@@ -525,7 +575,13 @@ function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => voi
     []
   );
 
-  const statusOptions = ["All", "Completed", "Processing", "Pending", "Action Required"];
+  const statusOptions = [
+    "All",
+    "Completed",
+    "Processing",
+    "Pending",
+    "Action Required",
+  ];
 
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((s) => {
@@ -577,12 +633,10 @@ function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => voi
     <div className="space-y-8">
       {/* Welcome */}
       <section>
-        <p className="text-sm font-medium text-blue-700">
-          {today}
-        </p>
+        <p className="text-sm font-medium text-blue-700">{today}</p>
 
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Welcome back, {user?.first_name || user?.business_name || 'there'}!
+          Welcome back, {user?.first_name || user?.business_name || "there"}!
         </h1>
 
         <p className="mt-2 text-sm text-slate-500">
@@ -590,7 +644,6 @@ function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => voi
         </p>
       </section>
 
-      {/* ... rest of DashboardHome JSX stays exactly the same ... */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -652,7 +705,7 @@ function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => voi
                       )}
                     </div>
                   ) : (
-                    <button 
+                    <button
                       onClick={() => onNavigate("Linked Accounts")}
                       className="flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-slate-100"
                     >
@@ -730,7 +783,7 @@ function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => voi
               Filter and track your recent tax filings
             </p>
           </div>
-          
+
           {/* Conditionally render View All only if there are submissions */}
           {submissions.length > 0 && (
             <button
@@ -829,7 +882,8 @@ function DashboardHome({ onNavigate, user }: { onNavigate: (page: string) => voi
                         No submissions yet
                       </p>
                       <p className="text-xs text-slate-500 mb-6 max-w-sm mx-auto">
-                        You haven't made any submissions yet. Once you complete a workflow, your filings will appear here.
+                        You haven't made any submissions yet. Once you complete
+                        a workflow, your filings will appear here.
                       </p>
                       <button
                         onClick={() => onNavigate("Workflows")}
@@ -903,7 +957,10 @@ function DashboardSkeleton() {
       {/* Stats Skeleton */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 h-40 flex flex-col justify-between">
+          <div
+            key={i}
+            className="rounded-2xl border border-slate-200 bg-white p-5 h-40 flex flex-col justify-between"
+          >
             <div className="flex justify-between items-start">
               <div className="h-12 w-12 rounded-xl bg-slate-100"></div>
               <div className="h-4 w-20 rounded bg-slate-100"></div>
@@ -923,7 +980,10 @@ function DashboardSkeleton() {
         <div className="h-4 w-48 bg-slate-100 rounded mb-6"></div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-20 rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex items-center gap-3">
+            <div
+              key={i}
+              className="h-20 rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex items-center gap-3"
+            >
               <div className="h-10 w-10 rounded-lg bg-slate-200"></div>
               <div className="flex-1">
                 <div className="h-4 w-24 bg-slate-200 rounded mb-2"></div>
@@ -948,11 +1008,23 @@ function DashboardSkeleton() {
         </div>
         <div className="p-5 space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="flex justify-between items-center py-3 border-b border-slate-50">
-              <div className="flex-1"><div className="h-4 w-32 bg-slate-200 rounded mb-2"></div><div className="h-3 w-20 bg-slate-100 rounded"></div></div>
-              <div className="flex-1"><div className="h-4 w-24 bg-slate-100 rounded"></div></div>
-              <div className="flex-1"><div className="h-4 w-24 bg-slate-100 rounded"></div></div>
-              <div className="flex-1 flex justify-end"><div className="h-6 w-20 bg-slate-100 rounded-full"></div></div>
+            <div
+              key={i}
+              className="flex justify-between items-center py-3 border-b border-slate-50"
+            >
+              <div className="flex-1">
+                <div className="h-4 w-32 bg-slate-200 rounded mb-2"></div>
+                <div className="h-3 w-20 bg-slate-100 rounded"></div>
+              </div>
+              <div className="flex-1">
+                <div className="h-4 w-24 bg-slate-100 rounded"></div>
+              </div>
+              <div className="flex-1">
+                <div className="h-4 w-24 bg-slate-100 rounded"></div>
+              </div>
+              <div className="flex-1 flex justify-end">
+                <div className="h-6 w-20 bg-slate-100 rounded-full"></div>
+              </div>
             </div>
           ))}
         </div>
