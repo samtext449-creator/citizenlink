@@ -108,6 +108,13 @@ export default function DashboardPage() {
   // TODO: replace `profile_completed` with the real field from /api/auth/me.
   const showProfileBanner = !user?.profile_completed;
 
+  // Session expiry warning
+  const WARNING_MS = 2 * 60 * 1000; // show the pop-up 2 minutes before expiry
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [showExpiry, setShowExpiry] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [extending, setExtending] = useState(false);
+
   const [accountOpen, setAccountOpen] = useState(false);
   const [currentAccount, setCurrentAccount] = useState("Individual Account");
 
@@ -127,6 +134,9 @@ export default function DashboardPage() {
 
         if (data.success && data.data) {
           setUser(data.data);
+          if (data.data.session_expires_at) {
+            setExpiresAt(new Date(data.data.session_expires_at).getTime());
+          }
           // Set account type based on backend response
           if (data.data.account_type === "Business") {
             setCurrentAccount("Business Account");
@@ -144,6 +154,47 @@ export default function DashboardPage() {
 
     fetchUser();
   }, [router]);
+
+  // Watch the session clock
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const tick = () => {
+      const left = expiresAt - Date.now();
+      if (left <= 0) {
+        setShowExpiry(false);
+        handleSignOut();
+        return;
+      }
+      setSecondsLeft(Math.ceil(left / 1000));
+      setShowExpiry(left <= WARNING_MS);
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expiresAt]);
+
+  async function handleContinueSession() {
+    setExtending(true);
+    try {
+      const res = await fetch("/api/auth/refresh", { method: "POST" });
+      if (!res.ok) {
+        await handleSignOut();
+        return;
+      }
+      const data = await res.json();
+      if (data?.data?.session_expires_at) {
+        setExpiresAt(new Date(data.data.session_expires_at).getTime());
+      }
+      setShowExpiry(false);
+    } catch {
+      await handleSignOut();
+    } finally {
+      setExtending(false);
+    }
+  }
 
   function handleNavigation(name: string) {
     setActivePage(name);
@@ -178,6 +229,48 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9F8] text-slate-800">
+      {/* Session expiry pop-up */}
+      {showExpiry && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 text-yellow-700">
+              <Clock3 size={24} />
+            </div>
+            <h2 className="mt-4 text-lg font-bold text-slate-900">
+              Your session is about to end
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Do you want to continue? You will be signed out in
+            </p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
+              {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
+              {String(secondsLeft % 60).padStart(2, "0")}
+            </p>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={handleSignOut}
+                disabled={extending}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                No, sign out
+              </button>
+              <button
+                onClick={handleContinueSession}
+                disabled={extending}
+                className="flex-1 rounded-xl bg-[#0B1B36] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+              >
+                {extending ? "Please wait…" : "Yes, stay signed in"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
