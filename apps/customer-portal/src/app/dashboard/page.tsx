@@ -100,11 +100,13 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Profile completion banner
-  const [bannerOpen, setBannerOpen] = useState(true);
-
   // Real User State
   const [user, setUser] = useState<any>(null);
+
+  // Profile completion banner (cannot be dismissed).
+  // It stays visible until the profile is complete.
+  // TODO: replace `profile_completed` with the real field from /api/auth/me.
+  const showProfileBanner = !user?.profile_completed;
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [currentAccount, setCurrentAccount] = useState("Individual Account");
@@ -305,35 +307,22 @@ export default function DashboardPage() {
         `}
       >
         {/* Profile completion banner */}
-        {bannerOpen && (
+        {showProfileBanner && (
           <div
             role="alert"
-            className="flex items-center justify-between gap-3 border-b border-yellow-300 bg-yellow-100 px-4 py-3 sm:px-7"
+            className="flex h-9 items-center justify-center gap-3 border-b border-yellow-300 bg-yellow-100 px-4"
           >
-            <div className="flex min-w-0 items-center gap-3">
-              <AlertCircle size={20} className="shrink-0 text-yellow-700" />
-              <p className="text-xs font-bold uppercase tracking-wide text-yellow-900 sm:text-sm">
-                To start automation, complete your profile
-              </p>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                onClick={() => handleNavigation("Profile")}
-                className="hidden items-center gap-1.5 rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-semibold text-yellow-950 transition hover:bg-yellow-500 sm:inline-flex"
-              >
-                Complete Profile
-                <ArrowRight size={14} />
-              </button>
-
-              <button
-                onClick={() => setBannerOpen(false)}
-                className="rounded-lg p-1.5 text-yellow-800 transition hover:bg-yellow-200"
-                aria-label="Dismiss banner"
-              >
-                <X size={18} />
-              </button>
-            </div>
+            <AlertCircle size={15} className="shrink-0 text-yellow-700" />
+            <p className="truncate text-[11px] font-bold uppercase tracking-wide text-yellow-900">
+              To start automation, complete your profile
+            </p>
+            <button
+              onClick={() => handleNavigation("Profile")}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-2.5 py-0.5 text-[11px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
+            >
+              Complete Profile
+              <ArrowRight size={12} />
+            </button>
           </div>
         )}
 
