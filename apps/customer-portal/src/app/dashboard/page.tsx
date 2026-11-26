@@ -312,16 +312,16 @@ export default function DashboardPage() {
             role="alert"
             className="flex h-9 items-center justify-center gap-3 border-b border-yellow-300 bg-yellow-100 px-4"
           >
-            <AlertCircle size={15} className="shrink-0 text-yellow-700" />
-            <p className="truncate text-[11px] font-bold uppercase tracking-wide text-yellow-900">
-              To start automation, complete your profile
+            <AlertCircle size={17} className="shrink-0 text-yellow-700" />
+            <p className="truncate text-[13px] font-bold uppercase tracking-wide text-yellow-900 sm:text-sm">
+              To start your journey of automation, complete your profile
             </p>
             <button
               onClick={() => handleNavigation("Profile")}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-2.5 py-0.5 text-[11px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-xs font-semibold text-yellow-950 transition hover:bg-yellow-500"
             >
               Complete Profile
-              <ArrowRight size={12} />
+              <ArrowRight size={13} />
             </button>
           </div>
         )}
