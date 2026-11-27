@@ -84,7 +84,7 @@ export default function MyTaxProfilePage({
       try {
         const res = await fetch("/api/tax-profile");
 
-        // 404 = nothing linked/verified yet, or the route is not built yet
+        // 404 = no KRA PIN linked yet, or the route is not built yet
         if (res.status === 404) {
           setProfile(null);
           return;
@@ -153,18 +153,8 @@ export default function MyTaxProfilePage({
             No tax profile yet
           </h2>
           <p className="mt-2 max-w-sm text-sm text-slate-500">
-            Verify your KRA PIN first. Your tax card, obligations and
-            compliance status will appear here.
+            No KRA PIN is linked to this account or profile.
           </p>
-          {onNavigate && (
-            <button
-              onClick={() => onNavigate("KRA Verification")}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#0B1B36] px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              <BadgeCheck size={17} />
-              Go to KRA Verification
-            </button>
-          )}
         </section>
       )}
 

@@ -211,10 +211,14 @@ export default function DashboardPage() {
     }
   }
 
-  // Get display name from backend user object
+  // Get display name from backend user object (the person's own name first)
+  const fullName =
+    user?.full_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ");
+
   const displayName =
+    fullName ||
     user?.business_name ||
-    user?.first_name ||
     user?.email?.split("@")[0] ||
     "User";
   const userInitial = displayName.charAt(0).toUpperCase();

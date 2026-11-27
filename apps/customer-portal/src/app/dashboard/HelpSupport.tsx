@@ -11,12 +11,20 @@ import {
   LifeBuoy,
   Mail,
   MessageCircle,
-  Phone,
+  Smartphone,
   Search,
   Send,
   CheckCircle2,
   ExternalLink,
 } from "lucide-react";
+
+// --------------------------------------------------
+// Contact details
+// --------------------------------------------------
+const SUPPORT_EMAIL = "xecoafrica@gmail.com";
+const WHATSAPP_DISPLAY = "0184790476";
+// WhatsApp links need the country code and no leading zero
+const WHATSAPP_LINK = "https://wa.me/254184790476";
 
 // --------------------------------------------------
 // Data
@@ -239,7 +247,7 @@ export default function HelpSupportPage() {
 
             <div className="mt-5 space-y-3">
               <a
-                href="mailto:support@taxflow.co.ke"
+                href={`mailto:${SUPPORT_EMAIL}`}
                 className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50/50"
               >
                 <div className="rounded-lg bg-blue-50 p-2.5 text-blue-700">
@@ -247,7 +255,9 @@ export default function HelpSupportPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-800">Email</p>
-                  <p className="text-xs text-slate-500">support@taxflow.co.ke</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {SUPPORT_EMAIL}
+                  </p>
                 </div>
               </a>
 
@@ -265,15 +275,22 @@ export default function HelpSupportPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3">
-                <div className="rounded-lg bg-violet-50 p-2.5 text-violet-700">
-                  <Phone size={18} />
+              <a
+                href={WHATSAPP_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 transition hover:border-green-200 hover:bg-green-50/50"
+              >
+                <div className="rounded-lg bg-green-50 p-2.5 text-green-700">
+                  <Smartphone size={18} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800">Phone</p>
-                  <p className="text-xs text-slate-500">+254 700 000 000</p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    WhatsApp
+                  </p>
+                  <p className="text-xs text-slate-500">{WHATSAPP_DISPLAY}</p>
                 </div>
-              </div>
+              </a>
             </div>
           </div>
 
@@ -286,9 +303,7 @@ export default function HelpSupportPage() {
               <p className="text-sm font-semibold text-slate-800">
                 Average response time
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Under 4 hours on business days
-              </p>
+              <p className="mt-0.5 text-xs text-slate-500">10 minutes</p>
             </div>
           </div>
         </section>
