@@ -41,7 +41,8 @@ import SubmissionsPage from "./Submissions";
 import LinkedAccountsPage from "./LinkedAccounts";
 import ProfilePage from "./Profile";
 import HelpSupportPage from "./HelpSupport";
-import SolaraAgent from "./SolaraAgent"; // Import the new agent
+import SolaraAgent from "./SolaraAgent"; 
+import OnboardingTour from "../../components/OnboardingTour"; // IMPORT TOUR
 
 // --------------------------------------------------
 // Navigation configuration
@@ -104,22 +105,22 @@ export default function DashboardPage() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // --- TOUR STATE ---
+  const [runTour, setRunTour] = useState(false);
+
   // Real User State
   const [user, setUser] = useState<any>(null);
 
-  // Profile banner: stays until Taxflow approves the profile.
-  // profile_status from /api/auth/me: "incomplete" | "pending_approval" | "approved"
   const profileStatus = user?.profile_status ?? "incomplete";
   const showProfileBanner = !!user && profileStatus !== "approved";
 
   // Session expiry warning
-  const WARNING_MS = 2 * 60 * 1000; // show the pop-up 2 minutes before expiry
+  const WARNING_MS = 2 * 60 * 1000; 
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [showExpiry, setShowExpiry] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [extending, setExtending] = useState(false);
 
-  // Only individual accounts are supported
   const currentAccount = "Individual Account";
 
   // Fetch real user data on mount
@@ -129,7 +130,6 @@ export default function DashboardPage() {
         const res = await fetch("/api/auth/me");
 
         if (res.status === 401) {
-          // Session expired or invalid, kick to login
           router.replace("/login");
           return;
         }
@@ -141,17 +141,22 @@ export default function DashboardPage() {
           if (data.data.session_expires_at) {
             setExpiresAt(new Date(data.data.session_expires_at).getTime());
           }
+
+          // --- TRIGGER TOUR ---
+          const hasSeenTour = localStorage.getItem("taxflow_tour_completed");
+          if (!hasSeenTour && activePage === "Overview") {
+            setRunTour(true);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch user session:", error);
       } finally {
-        // Artificial delay just to show the skeleton for a moment
         setTimeout(() => setIsLoading(false), 800);
       }
     };
 
     fetchUser();
-  }, [router]);
+  }, [router, activePage]);
 
   // Watch the session clock
   useEffect(() => {
@@ -212,7 +217,6 @@ export default function DashboardPage() {
     }
   }
 
-  // Get display name from backend user object (the person's own name first)
   const fullName =
     user?.full_name ||
     [user?.first_name, user?.last_name].filter(Boolean).join(" ");
@@ -230,6 +234,9 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9F8] text-slate-800">
+      {/* RENDER TOUR COMPONENT */}
+      {!isLoading && <OnboardingTour run={runTour} onComplete={() => setRunTour(false)} />}
+
       {/* Session expiry pop-up */}
       {showExpiry && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
@@ -291,7 +298,6 @@ export default function DashboardPage() {
           lg:translate-x-0
         `}
       >
-        {/* Brand */}
         <div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-5">
           <div className="flex items-center gap-3 overflow-hidden">
             {!collapsed && (
@@ -315,13 +321,8 @@ export default function DashboardPage() {
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="hidden rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 lg:block"
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {collapsed ? (
-              <PanelLeftOpen size={19} />
-            ) : (
-              <PanelLeftClose size={19} />
-            )}
+            {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
           </button>
 
           <button
@@ -332,7 +333,6 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-3 py-6">
           {!collapsed && (
             <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
@@ -344,12 +344,13 @@ export default function DashboardPage() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = activePage === item.name;
+              const isOverview = item.name === "Overview"; // Used for Tour
 
               return (
                 <button
                   key={item.name}
                   onClick={() => handleNavigation(item.name)}
-                  title={collapsed ? item.name : undefined}
+                  data-tour={isOverview ? "nav-overview" : undefined} // TOUR HOOK
                   className={`
                     group flex w-full items-center gap-3 rounded-xl
                     px-3 py-3 text-sm font-medium transition-all
@@ -375,11 +376,9 @@ export default function DashboardPage() {
           </nav>
         </div>
 
-        {/* Sidebar bottom */}
         <div className="border-t border-slate-100 p-3">
           <button
             onClick={handleSignOut}
-            title={collapsed ? "Sign Out" : undefined}
             className={`
               flex w-full items-center gap-3 rounded-xl px-3 py-3
               text-sm font-medium text-red-600 transition
@@ -400,7 +399,6 @@ export default function DashboardPage() {
           ${collapsed ? "lg:ml-[76px]" : "lg:ml-[260px]"}
         `}
       >
-        {/* Profile completion banner */}
         {showProfileBanner && (
           <div
             role="alert"
@@ -436,7 +434,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Header */}
         <header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-md sm:px-7">
           <div className="flex items-center gap-3">
             <button
@@ -453,7 +450,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -489,8 +485,8 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Profile */}
-            <div className="relative">
+            {/* Profile (TOUR HOOK) */}
+            <div className="relative" data-tour="profile-menu">
               <button
                 onClick={() => {
                   setProfileOpen(!profileOpen);
@@ -549,7 +545,6 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Page content */}
         <main className="mx-auto max-w-[1600px] p-4 sm:p-7 lg:p-8">
           {isLoading ? (
             <DashboardSkeleton />
@@ -583,7 +578,6 @@ export default function DashboardPage() {
           )}
         </main>
 
-        {/* Footer */}
         <footer className="border-t border-slate-200 px-7 py-5">
           <div className="flex flex-col items-center justify-between gap-2 text-xs text-slate-400 sm:flex-row">
             <p>© 2026 Taxflow. All rights reserved.</p>
@@ -592,13 +586,15 @@ export default function DashboardPage() {
         </footer>
       </div>
 
-      {/* Solara AI Agent - Rendered on every page except Workflows */}
+      {/* Solara AI Agent (TOUR HOOK) */}
       {!isLoading && activePage !== "Workflows" && (
-        <SolaraAgent
-          activePage={activePage}
-          onNavigate={handleNavigation}
-          userName={user?.first_name || user?.business_name}
-        />
+        <div data-tour="solara">
+          <SolaraAgent
+            activePage={activePage}
+            onNavigate={handleNavigation}
+            userName={user?.first_name || user?.business_name}
+          />
+        </div>
       )}
     </div>
   );
@@ -619,7 +615,6 @@ function DashboardHome({
     linkedAccounts[0] || { name: "No Account", pin: "" }
   );
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -676,7 +671,6 @@ function DashboardHome({
     setFilterDate("");
   }
 
-  // Dynamic Date
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -686,8 +680,8 @@ function DashboardHome({
 
   return (
     <div className="space-y-8">
-      {/* Welcome */}
-      <section>
+      {/* Welcome (TOUR HOOK) */}
+      <section data-tour="welcome">
         <p className="text-sm font-medium text-blue-700">{today}</p>
 
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
@@ -789,18 +783,22 @@ function DashboardHome({
         })}
       </section>
 
-      {/* Quick actions */}
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="font-bold text-slate-900">Quick Actions</h3>
         <p className="mt-1 text-xs text-slate-400">Common tasks in Taxflow</p>
 
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <QuickAction
-            icon={Plus}
-            title="Create Workflow"
-            description="Set up a new tax automation"
-            onClick={() => onNavigate("Workflows")}
-          />
+          
+          {/* Quick Action (TOUR HOOK) */}
+          <div data-tour="create-workflow">
+            <QuickAction
+              icon={Plus}
+              title="Create Workflow"
+              description="Set up a new tax automation"
+              onClick={() => onNavigate("Workflows")}
+            />
+          </div>
+
           <QuickAction
             icon={Link2}
             title="Link KRA Account"
@@ -822,9 +820,7 @@ function DashboardHome({
         </div>
       </section>
 
-      {/* Recent Submissions Table */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {/* Header */}
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="font-bold text-slate-900">Recent Submissions</h3>
@@ -833,7 +829,6 @@ function DashboardHome({
             </p>
           </div>
 
-          {/* Conditionally render View All only if there are submissions */}
           {submissions.length > 0 && (
             <button
               onClick={() => onNavigate("My Submissions")}
@@ -845,9 +840,7 @@ function DashboardHome({
           )}
         </div>
 
-        {/* Filter bar */}
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 lg:flex-row lg:items-center">
-          {/* Search */}
           <div className="relative flex-1">
             <Search
               size={15}
@@ -862,7 +855,6 @@ function DashboardHome({
             />
           </div>
 
-          {/* Type filter */}
           <div className="flex items-center gap-1.5">
             <Filter size={14} className="text-slate-400" />
             <select
@@ -878,7 +870,6 @@ function DashboardHome({
             </select>
           </div>
 
-          {/* Status filter */}
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -891,7 +882,6 @@ function DashboardHome({
             ))}
           </select>
 
-          {/* Date filter */}
           <input
             type="date"
             value={filterDate}
@@ -899,7 +889,6 @@ function DashboardHome({
             className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
           />
 
-          {/* Reset */}
           <button
             onClick={resetFilters}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
@@ -908,7 +897,6 @@ function DashboardHome({
           </button>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
@@ -978,7 +966,6 @@ function DashboardHome({
           </table>
         </div>
 
-        {/* Footer count */}
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-[11px] text-slate-400">
           <span>
             Showing {filteredSubmissions.length} of {submissions.length}{" "}
@@ -996,14 +983,12 @@ function DashboardHome({
 function DashboardSkeleton() {
   return (
     <div className="space-y-8 animate-pulse">
-      {/* Welcome Skeleton */}
       <section>
         <div className="h-4 w-48 bg-slate-200 rounded mb-3"></div>
         <div className="h-8 w-64 bg-slate-200 rounded mb-3"></div>
         <div className="h-4 w-96 bg-slate-200 rounded"></div>
       </section>
 
-      {/* Stats Skeleton */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[1, 2, 3].map((i) => (
           <div
@@ -1023,7 +1008,6 @@ function DashboardSkeleton() {
         ))}
       </section>
 
-      {/* Quick Actions Skeleton */}
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="h-5 w-32 bg-slate-200 rounded mb-2"></div>
         <div className="h-4 w-48 bg-slate-100 rounded mb-6"></div>
@@ -1043,7 +1027,6 @@ function DashboardSkeleton() {
         </div>
       </section>
 
-      {/* Table Skeleton */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="p-5 border-b border-slate-100">
           <div className="h-5 w-40 bg-slate-200 rounded mb-2"></div>
@@ -1085,33 +1068,6 @@ function DashboardSkeleton() {
 // --------------------------------------------------
 // Reusable components
 // --------------------------------------------------
-function NotificationItem({
-  icon: Icon,
-  title,
-  description,
-  time,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  time: string;
-}) {
-  return (
-    <div className="flex gap-3 p-4 hover:bg-slate-50">
-      <div className="mt-1 text-blue-600">
-        <Icon size={19} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-800">{title}</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
-          {description}
-        </p>
-        <p className="mt-2 text-[10px] text-slate-400">{time}</p>
-      </div>
-    </div>
-  );
-}
-
 function ProfileMenuItem({
   icon: Icon,
   label,
@@ -1146,7 +1102,7 @@ function QuickAction({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50"
+      className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50 h-full"
     >
       <div className="rounded-lg bg-blue-50 p-2.5 text-blue-700">
         <Icon size={19} />
@@ -1160,9 +1116,6 @@ function QuickAction({
   );
 }
 
-// --------------------------------------------------
-// Placeholder for other navigation destinations
-// --------------------------------------------------
 function SectionPlaceholder({
   title,
   onBack,
@@ -1175,14 +1128,11 @@ function SectionPlaceholder({
       <div className="rounded-2xl bg-blue-50 p-5 text-blue-700">
         <FolderOpen size={32} />
       </div>
-
       <h2 className="mt-5 text-xl font-bold text-slate-900">{title}</h2>
-
       <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500">
         This section is part of the Taxflow dashboard structure. Its dedicated
         interface and functionality can be developed next.
       </p>
-
       <button
         onClick={onBack}
         className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#0B1B36] px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
