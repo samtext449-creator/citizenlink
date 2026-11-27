@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Figtree, Newsreader } from "next/font/google";
 import { ArrowLeft, ArrowRight, Check, Loader2, X } from "lucide-react";
 
-const heading = Newsreader({ subsets: ["latin"], weight: ["400", "500", "600"] });
-const body = Figtree({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
 // Change these if your routes are named differently
 const DASHBOARD_ROUTE = "/dashboard";
@@ -162,16 +159,16 @@ export default function SelfDeclarationPage() {
   }
 
   return (
-    <div className={`${body.className} min-h-screen bg-white text-slate-800 lg:flex`}>
+    <div className={`font-sans min-h-screen bg-white text-slate-800 lg:flex`}>
       {/* Left rail */}
       <aside className="bg-[#0B1B36] px-6 py-6 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[340px] lg:shrink-0 lg:flex-col lg:justify-between lg:px-10 lg:py-12">
         <div>
-          <p className={`${heading.className} text-2xl font-semibold`}>
+          <p className={`font-serif text-2xl font-semibold`}>
             Taxflow<span className="text-blue-400">.</span>
           </p>
 
           <div className="mt-8 hidden lg:block">
-            <h1 className={`${heading.className} text-[34px] font-medium leading-tight`}>
+            <h1 className={`font-serif text-[34px] font-medium leading-tight`}>
               Let's get your tax profile set up.
             </h1>
             <p className="mt-4 max-w-[26ch] text-[15px] leading-relaxed text-slate-300">
@@ -199,7 +196,7 @@ export default function SelfDeclarationPage() {
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-700">
                 <Check size={22} />
               </div>
-              <h2 className={`${heading.className} mt-6 text-3xl font-medium text-slate-900`}>
+              <h2 className={`font-serif mt-6 text-3xl font-medium text-slate-900`}>
                 Thanks, we've got your details.
               </h2>
               <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
@@ -216,7 +213,7 @@ export default function SelfDeclarationPage() {
             </div>
           ) : step === 1 ? (
             <div>
-              <h2 className={`${heading.className} text-3xl font-medium text-slate-900`}>
+              <h2 className={`font-serif text-3xl font-medium text-slate-900`}>
                 First, tell us about you
               </h2>
 
@@ -298,7 +295,7 @@ export default function SelfDeclarationPage() {
                 </div>
               </div>
 
-              <h3 className={`${heading.className} mt-14 text-2xl font-medium text-slate-900`}>
+              <h3 className={`font-serif mt-14 text-2xl font-medium text-slate-900`}>
                 Where do you live?
               </h3>
 
@@ -346,7 +343,7 @@ export default function SelfDeclarationPage() {
             </div>
           ) : (
             <div>
-              <h2 className={`${heading.className} text-3xl font-medium text-slate-900`}>
+              <h2 className={`font-serif text-3xl font-medium text-slate-900`}>
                 Here's what we found
               </h2>
               <p className="mt-3 text-[15px] text-slate-500">
@@ -433,7 +430,7 @@ export default function SelfDeclarationPage() {
             className="flex max-h-[85vh] w-full max-w-lg flex-col bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between px-6 pt-6">
-              <h2 className={`${heading.className} text-2xl font-medium text-slate-900`}>
+              <h2 className={`font-serif text-2xl font-medium text-slate-900`}>
                 Terms and conditions
               </h2>
               <button
