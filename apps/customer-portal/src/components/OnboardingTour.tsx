@@ -5,9 +5,6 @@ import { useEffect, useRef } from "react";
 import { driver, Driver, DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
 
-// Every step points at a data-tour attribute in the dashboard.
-// Steps whose element is missing or off screen (for example the sidebar on a
-// phone, or the profile banner once the profile is approved) are skipped.
 const ALL_STEPS: DriveStep[] = [
   // ---- Welcome ----
   {
@@ -30,8 +27,6 @@ const ALL_STEPS: DriveStep[] = [
       align: "center",
     },
   },
-
-  // ---- Sidebar ----
   {
     element: '[data-tour="nav-overview"]',
     popover: {
@@ -132,8 +127,6 @@ const ALL_STEPS: DriveStep[] = [
       align: "start",
     },
   },
-
-  // ---- Top bar ----
   {
     element: '[data-tour="account-type"]',
     popover: {
@@ -174,8 +167,6 @@ const ALL_STEPS: DriveStep[] = [
       align: "end",
     },
   },
-
-  // ---- Dashboard content ----
   {
     element: '[data-tour="stats"]',
     popover: {
@@ -236,8 +227,6 @@ const ALL_STEPS: DriveStep[] = [
       align: "center",
     },
   },
-
-  // ---- Wrap up ----
   {
     element: '[data-tour="sign-out"]',
     popover: {
@@ -276,7 +265,6 @@ export default function OnboardingTour({
 }) {
   const driverRef = useRef<Driver | null>(null);
 
-  // Keep the latest onComplete without restarting the tour when the parent re-renders
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
     onCompleteRef.current = onComplete;
@@ -285,7 +273,6 @@ export default function OnboardingTour({
   useEffect(() => {
     if (!run) return;
 
-    // Wait for an element to exist in the DOM
     const waitForElement = (selector: string): Promise<Element | null> =>
       new Promise((resolve) => {
         const found = document.querySelector(selector);
@@ -300,7 +287,6 @@ export default function OnboardingTour({
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
-        // Give up after 3 seconds so it never hangs
         setTimeout(() => {
           observer.disconnect();
           resolve(null);
@@ -308,12 +294,10 @@ export default function OnboardingTour({
       });
 
     const startTour = async () => {
-      // Solara is usually the last thing to render
       await waitForElement('[data-tour="solara"]');
 
       if (driverRef.current) driverRef.current.destroy();
 
-      // Only keep steps that can actually be shown right now
       const steps = ALL_STEPS.filter((s) =>
         typeof s.element === "string" ? isVisible(s.element) : true
       );
@@ -330,34 +314,32 @@ export default function OnboardingTour({
         nextBtnText: "Next",
         prevBtnText: "Back",
         doneBtnText: "Got it!",
-        
-        // Inject the custom "Skip Tour" button
+
+        // Customize the popover to add the Skip button and fix layout
         onPopoverRender: (popover) => {
-          // Create the skip button
+          // 1. Create the Skip button
           const skipBtn = document.createElement("button");
           skipBtn.innerText = "Skip Tour";
-          skipBtn.className = "text-xs font-semibold text-slate-500 hover:text-slate-800 hover:underline transition-all cursor-pointer";
+          skipBtn.className = "custom-skip-btn";
           
-          // Action when clicked
           skipBtn.addEventListener("click", () => {
             onCompleteRef.current();
             localStorage.setItem("taxflow_tour_completed", "true");
             driverObj.destroy();
           });
 
-          // Hide the default X icon
+          // 2. Hide the default close X
           const closeBtn = popover.wrapper.querySelector('.driver-popover-close-btn');
           if (closeBtn) {
              (closeBtn as HTMLElement).style.display = 'none';
           }
 
-          // Add the skip button to the title wrapper
-          const header = popover.wrapper.querySelector('.driver-popover-title');
-          if (header && header.parentElement) {
-            header.parentElement.style.display = "flex";
-            header.parentElement.style.justifyContent = "space-between";
-            header.parentElement.style.alignItems = "center";
-            header.parentElement.appendChild(skipBtn);
+          // 3. Restructure the header to hold Title (left) and Skip (right)
+          const titleWrapper = popover.wrapper.querySelector('.driver-popover-title');
+          if (titleWrapper && titleWrapper.parentElement) {
+            const headerContainer = titleWrapper.parentElement;
+            headerContainer.classList.add("custom-popover-header");
+            headerContainer.appendChild(skipBtn);
           }
         },
 
@@ -373,12 +355,10 @@ export default function OnboardingTour({
       driverObj.drive();
     };
 
-    // Small delay to let the CSS transitions finish
     const timer = setTimeout(startTour, 500);
 
     return () => {
       clearTimeout(timer);
-      // Don't destroy here: let the tour live until the user finishes it.
     };
   }, [run]);
 
