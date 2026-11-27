@@ -209,10 +209,19 @@ export default function SelfDeclarationPage() {
   }
 
   return (
-    <div className={`font-sans min-h-screen bg-white text-slate-800 lg:flex`}>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-white font-sans text-slate-800 lg:flex">
       {/* Left rail */}
       <aside className="bg-[#0B1B36] px-6 py-6 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[340px] lg:shrink-0 lg:flex-col lg:justify-between lg:px-10 lg:py-12">
         <div>
+          <button
+            type="button"
+            onClick={() => router.push(DASHBOARD_ROUTE)}
+            className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-slate-300 transition hover:text-white"
+          >
+            <ArrowLeft size={16} />
+            Back to dashboard
+          </button>
+
           <p className={`font-serif text-2xl font-semibold`}>
             Taxflow<span className="text-blue-400">.</span>
           </p>
@@ -241,11 +250,12 @@ export default function SelfDeclarationPage() {
       {/* Form */}
       <main className="flex-1 px-6 py-10 sm:px-12 lg:px-20 lg:py-16">
         <div className="mx-auto max-w-xl">
-          {!done && (
+          {!done && step === 2 && (
             <button
               type="button"
-              onClick={() => router.push(DASHBOARD_ROUTE)}
-              className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+              onClick={() => setStep(1)}
+              disabled={submitting}
+              className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
             >
               <ArrowLeft size={16} />
               Back
@@ -340,6 +350,22 @@ export default function SelfDeclarationPage() {
                 </div>
 
                 <div>
+                  <label htmlFor="phone" className={labelClass}>
+                    Telephone number
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    className={fieldClass}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s]/g, ""))}
+                    placeholder="0712 345 678"
+                    autoComplete="tel"
+                  />
+                </div>
+
+                <div>
                   <label htmlFor="email" className={labelClass}>
                     Email address
                   </label>
@@ -371,17 +397,6 @@ export default function SelfDeclarationPage() {
                     onChange={(e) => setSubCounty(e.target.value)} placeholder="Westlands" />
                 </div>
                 <div>
-                  <label htmlFor="building_name" className={labelClass}>Building name</label>
-                  <input id="building_name" className={fieldClass} value={buildingName}
-                    onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Rift Plaza" />
-                </div>
-                <div>
-                  <label htmlFor="phone" className={labelClass}>Telephone number</label>
-                  <input id="phone" type="tel" inputMode="tel" className={fieldClass} value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s]/g, ""))}
-                    placeholder="0712 345 678" autoComplete="tel" />
-                </div>
-                <div>
                   <label htmlFor="po_box" className={labelClass}>P.O. Box</label>
                   <input id="po_box" className={fieldClass} value={poBox}
                     onChange={(e) => setPoBox(e.target.value)} placeholder="12345" />
@@ -390,6 +405,11 @@ export default function SelfDeclarationPage() {
                   <label htmlFor="zip_code" className={labelClass}>Zip code</label>
                   <input id="zip_code" className={fieldClass} value={zipCode}
                     onChange={(e) => setZipCode(e.target.value)} placeholder="00100" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="building_name" className={labelClass}>Building name</label>
+                  <input id="building_name" className={fieldClass} value={buildingName}
+                    onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Rift Plaza" />
                 </div>
               </div>
 
@@ -479,36 +499,33 @@ export default function SelfDeclarationPage() {
               </div>
 
               <div className="mt-10">
-                <p className="text-[15px] text-slate-600">
-                  Before you submit, please read our{" "}
-                  <button
-                    type="button"
-                    onClick={() => setTermsOpen(true)}
-                    className="font-semibold text-blue-700 underline underline-offset-4 hover:text-blue-900"
-                  >
-                    terms and conditions
-                  </button>
-                  .
-                </p>
-                {termsAccepted && (
-                  <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
-                    <Check size={15} /> You've accepted the terms.
-                  </p>
-                )}
+                <label className="flex cursor-pointer items-start gap-3 text-[15px] leading-relaxed text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-[#0B1B36] focus:ring-[#0B1B36]"
+                  />
+                  <span>
+                    I have read and agree to the{" "}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setTermsOpen(true);
+                      }}
+                      className="font-semibold text-blue-700 underline underline-offset-4 hover:text-blue-900"
+                    >
+                      terms and conditions
+                    </button>
+                    .
+                  </span>
+                </label>
               </div>
 
               {submitError && <p className="mt-6 text-sm text-red-600">{submitError}</p>}
 
-              <div className="mt-10 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  disabled={submitting}
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
-                >
-                  <ArrowLeft size={16} />
-                  Back
-                </button>
+              <div className="mt-10 flex items-center justify-end">
                 <button
                   type="button"
                   onClick={handleSubmit}
