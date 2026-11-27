@@ -106,10 +106,10 @@ export default function DashboardPage() {
   // Real User State
   const [user, setUser] = useState<any>(null);
 
-  // Profile completion banner (cannot be dismissed).
-  // It stays visible until the profile is complete.
-  // TODO: replace `profile_completed` with the real field from /api/auth/me.
-  const showProfileBanner = !user?.profile_completed;
+  // Profile banner: stays until Taxflow approves the profile.
+  // profile_status from /api/auth/me: "incomplete" | "pending_approval" | "approved"
+  const profileStatus = user?.profile_status ?? "incomplete";
+  const showProfileBanner = !!user && profileStatus !== "approved";
 
   // Session expiry warning
   const WARNING_MS = 2 * 60 * 1000; // show the pop-up 2 minutes before expiry
@@ -399,19 +399,35 @@ export default function DashboardPage() {
         {showProfileBanner && (
           <div
             role="alert"
-            className="flex h-9 items-center justify-center gap-3 border-b border-yellow-300 bg-yellow-100 px-4"
+            className={`flex h-9 items-center justify-center gap-3 border-b px-4 ${
+              profileStatus === "pending_approval"
+                ? "border-blue-200 bg-blue-50"
+                : "border-yellow-300 bg-yellow-100"
+            }`}
           >
-            <AlertCircle size={17} className="shrink-0 text-yellow-700" />
-            <p className="truncate text-[13px] font-semibold text-yellow-900">
-              To start your journey of automation, complete your profile
-            </p>
-            <button
-              onClick={() => handleNavigation("Profile")}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
-            >
-              Complete Profile
-              <ArrowRight size={13} />
-            </button>
+            {profileStatus === "pending_approval" ? (
+              <>
+                <Clock3 size={17} className="shrink-0 text-blue-700" />
+                <p className="truncate text-[13px] font-semibold text-blue-900">
+                  Your application is in the approval stage. Taxflow will
+                  approve it shortly.
+                </p>
+              </>
+            ) : (
+              <>
+                <AlertCircle size={17} className="shrink-0 text-yellow-700" />
+                <p className="truncate text-[13px] font-semibold text-yellow-900">
+                  To start your journey of automation, complete your profile
+                </p>
+                <button
+                  onClick={() => router.push("/self-declaration")}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
+                >
+                  Complete Profile
+                  <ArrowRight size={13} />
+                </button>
+              </>
+            )}
           </div>
         )}
 
