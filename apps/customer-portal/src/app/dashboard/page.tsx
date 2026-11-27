@@ -41,6 +41,7 @@ import SubmissionsPage from "./Submissions";
 import LinkedAccountsPage from "./LinkedAccounts";
 import ProfilePage from "./Profile";
 import HelpSupportPage from "./HelpSupport";
+import SolaraAgent from "./SolaraAgent"; // Import the new agent
 
 // --------------------------------------------------
 // Navigation configuration
@@ -590,6 +591,15 @@ export default function DashboardPage() {
           </div>
         </footer>
       </div>
+
+      {/* Solara AI Agent - Rendered on every page except Workflows */}
+      {!isLoading && activePage !== "Workflows" && (
+        <SolaraAgent
+          activePage={activePage}
+          onNavigate={handleNavigation}
+          userName={user?.first_name || user?.business_name}
+        />
+      )}
     </div>
   );
 }
