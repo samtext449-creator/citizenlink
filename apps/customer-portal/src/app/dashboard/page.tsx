@@ -32,7 +32,6 @@ import {
   Filter,
   Search,
   TrendingUp,
-  RefreshCw // Added for the reset button
 } from "lucide-react";
 import MySubscriptionPage from "./MySubscription";
 import WorkflowsPage from "./Workflows";
@@ -233,13 +232,6 @@ export default function DashboardPage() {
       router.refresh();
     }
   }
-
-  // Helper for testing the tour
-  const resetTour = () => {
-    localStorage.removeItem("taxflow_tour_completed");
-    setRunTour(false);
-    setTimeout(() => setRunTour(true), 100);
-  };
 
   const fullName =
     user?.full_name ||
@@ -474,14 +466,6 @@ export default function DashboardPage() {
               <User size={16} className="text-slate-700" />
               <span>Individual</span>
             </div>
-
-            <button 
-              onClick={resetTour} 
-              data-tour="reset-tour"
-              className="hidden lg:flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
-            >
-              <RefreshCw size={14} /> Reset Tour
-            </button>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">

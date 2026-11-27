@@ -16,6 +16,7 @@ import {
   Send,
   CheckCircle2,
   ExternalLink,
+  PlayCircle,
 } from "lucide-react";
 
 // --------------------------------------------------
@@ -23,7 +24,6 @@ import {
 // --------------------------------------------------
 const SUPPORT_EMAIL = "xecoafrica@gmail.com";
 const WHATSAPP_DISPLAY = "0184790476";
-// WhatsApp links need the country code and no leading zero
 const WHATSAPP_LINK = "https://wa.me/254184790476";
 
 // --------------------------------------------------
@@ -121,6 +121,11 @@ export default function HelpSupportPage() {
     setSent(true);
     setForm({ subject: "", category: "general", message: "" });
     setTimeout(() => setSent(false), 5000);
+  }
+
+  function replayTour() {
+    localStorage.removeItem("taxflow_tour_completed");
+    window.location.reload();
   }
 
   return (
@@ -291,6 +296,24 @@ export default function HelpSupportPage() {
                   <p className="text-xs text-slate-500">{WHATSAPP_DISPLAY}</p>
                 </div>
               </a>
+
+              {/* Replay Tour Button */}
+              <button
+                onClick={replayTour}
+                className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <div className="rounded-lg bg-slate-100 p-2.5 text-slate-700">
+                  <PlayCircle size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">
+                    Replay Platform Tour
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Show me around Taxflow again
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
 

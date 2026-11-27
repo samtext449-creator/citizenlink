@@ -330,6 +330,37 @@ export default function OnboardingTour({
         nextBtnText: "Next",
         prevBtnText: "Back",
         doneBtnText: "Got it!",
+        
+        // Inject the custom "Skip Tour" button
+        onPopoverRender: (popover) => {
+          // Create the skip button
+          const skipBtn = document.createElement("button");
+          skipBtn.innerText = "Skip Tour";
+          skipBtn.className = "text-xs font-semibold text-slate-500 hover:text-slate-800 hover:underline transition-all cursor-pointer";
+          
+          // Action when clicked
+          skipBtn.addEventListener("click", () => {
+            onCompleteRef.current();
+            localStorage.setItem("taxflow_tour_completed", "true");
+            driverObj.destroy();
+          });
+
+          // Hide the default X icon
+          const closeBtn = popover.wrapper.querySelector('.driver-popover-close-btn');
+          if (closeBtn) {
+             (closeBtn as HTMLElement).style.display = 'none';
+          }
+
+          // Add the skip button to the title wrapper
+          const header = popover.wrapper.querySelector('.driver-popover-title');
+          if (header && header.parentElement) {
+            header.parentElement.style.display = "flex";
+            header.parentElement.style.justifyContent = "space-between";
+            header.parentElement.style.alignItems = "center";
+            header.parentElement.appendChild(skipBtn);
+          }
+        },
+
         onDestroyStarted: () => {
           onCompleteRef.current();
           localStorage.setItem("taxflow_tour_completed", "true");
