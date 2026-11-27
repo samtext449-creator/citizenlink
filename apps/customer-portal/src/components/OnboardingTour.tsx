@@ -314,42 +314,35 @@ export default function OnboardingTour({
         nextBtnText: "Next",
         prevBtnText: "Back",
         doneBtnText: "Got it!",
-
-        // Customize the popover to add the Skip button and fix layout
+        
+        // We use the native popover render to build exactly what we want
         onPopoverRender: (popover) => {
-          // 1. Create the Skip button
-          const skipBtn = document.createElement("button");
-          skipBtn.innerText = "Skip Tour";
-          skipBtn.className = "custom-skip-btn";
-          
-          skipBtn.addEventListener("click", () => {
-            onCompleteRef.current();
-            localStorage.setItem("taxflow_tour_completed", "true");
-            driverObj.destroy();
-          });
+           // Hide the default X icon completely
+           const closeBtn = popover.wrapper.querySelector('.driver-popover-close-btn') as HTMLElement;
+           if (closeBtn) closeBtn.style.display = 'none';
 
-          // 2. Hide the default close X
-          const closeBtn = popover.wrapper.querySelector('.driver-popover-close-btn');
-          if (closeBtn) {
-             (closeBtn as HTMLElement).style.display = 'none';
-          }
+           // Apply custom classes to the wrapper
+           popover.wrapper.classList.add('custom-tour-popover');
 
-          // 3. Find the Title, and its parent Header
-          const title = popover.wrapper.querySelector('.driver-popover-title');
-          
-          if (title && title.parentElement) {
-            const header = title.parentElement;
-            
-            // Force the header to be a flex container so Title is left and Skip is right
-            header.style.display = "flex";
-            header.style.justifyContent = "space-between";
-            header.style.alignItems = "flex-start";
-            header.style.gap = "16px";
-            header.style.width = "100%";
-            
-            // Append our custom skip button
-            header.appendChild(skipBtn);
-          }
+           // Inject the Skip button into the title container
+           const title = popover.title;
+           const skipBtn = document.createElement('button');
+           skipBtn.innerText = "Skip Tour";
+           skipBtn.className = "text-xs font-semibold text-slate-400 hover:text-slate-800 transition-colors cursor-pointer";
+           skipBtn.style.marginLeft = "auto";
+           
+           skipBtn.addEventListener("click", () => {
+             onCompleteRef.current();
+             localStorage.setItem("taxflow_tour_completed", "true");
+             driverObj.destroy();
+           });
+
+           // Modify the title to be a flex container
+           title.style.display = "flex";
+           title.style.alignItems = "flex-start";
+           title.style.justifyContent = "space-between";
+           title.style.gap = "16px";
+           title.appendChild(skipBtn);
         },
 
         onDestroyStarted: () => {
