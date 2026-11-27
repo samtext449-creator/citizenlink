@@ -334,12 +334,21 @@ export default function OnboardingTour({
              (closeBtn as HTMLElement).style.display = 'none';
           }
 
-          // 3. Restructure the header to hold Title (left) and Skip (right)
-          const titleWrapper = popover.wrapper.querySelector('.driver-popover-title');
-          if (titleWrapper && titleWrapper.parentElement) {
-            const headerContainer = titleWrapper.parentElement;
-            headerContainer.classList.add("custom-popover-header");
-            headerContainer.appendChild(skipBtn);
+          // 3. Find the Title, and its parent Header
+          const title = popover.wrapper.querySelector('.driver-popover-title');
+          
+          if (title && title.parentElement) {
+            const header = title.parentElement;
+            
+            // Force the header to be a flex container so Title is left and Skip is right
+            header.style.display = "flex";
+            header.style.justifyContent = "space-between";
+            header.style.alignItems = "flex-start";
+            header.style.gap = "16px";
+            header.style.width = "100%";
+            
+            // Append our custom skip button
+            header.appendChild(skipBtn);
           }
         },
 
