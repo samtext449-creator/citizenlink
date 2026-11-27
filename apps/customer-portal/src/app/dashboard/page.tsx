@@ -344,6 +344,7 @@ export default function DashboardPage() {
 
           <button
             onClick={() => setCollapsed(!collapsed)}
+            data-tour="collapse-sidebar"
             className="hidden rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 lg:block"
           >
             {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
@@ -368,13 +369,13 @@ export default function DashboardPage() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = activePage === item.name;
-              const isOverview = item.name === "Overview"; 
+              const tourId = `nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`;
 
               return (
                 <button
                   key={item.name}
                   onClick={() => handleNavigation(item.name)}
-                  data-tour={isOverview ? "nav-overview" : undefined} 
+                  data-tour={tourId} 
                   className={`
                     group flex w-full items-center gap-3 rounded-xl
                     px-3 py-3 text-sm font-medium transition-all
@@ -403,6 +404,7 @@ export default function DashboardPage() {
         <div className="border-t border-slate-100 p-3">
           <button
             onClick={handleSignOut}
+            data-tour="sign-out"
             className={`
               flex w-full items-center gap-3 rounded-xl px-3 py-3
               text-sm font-medium text-red-600 transition
@@ -426,6 +428,7 @@ export default function DashboardPage() {
         {showProfileBanner && (
           <div
             role="alert"
+            data-tour="profile-banner"
             className={`flex h-9 items-center justify-center gap-3 border-b px-4 ${
               profileStatus === "pending_approval"
                 ? "border-blue-200 bg-blue-50"
@@ -467,14 +470,14 @@ export default function DashboardPage() {
               <Menu size={22} />
             </button>
 
-            <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm">
+            <div data-tour="account-type" className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm">
               <User size={16} className="text-slate-700" />
               <span>Individual</span>
             </div>
 
-            {/* DEBUG RESET TOUR BUTTON - Remove in production */}
             <button 
               onClick={resetTour} 
+              data-tour="reset-tour"
               className="hidden lg:flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
             >
               <RefreshCw size={14} /> Reset Tour
@@ -488,6 +491,7 @@ export default function DashboardPage() {
                   setNotificationsOpen(!notificationsOpen);
                   setProfileOpen(false);
                 }}
+                data-tour="notifications"
                 className="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100"
                 aria-label="Notifications"
               >
@@ -725,7 +729,7 @@ function DashboardHome({
         </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section data-tour="stats" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {stats.map((stat) => {
           const Icon = stat.icon;
           const isLinkedAccounts = stat.title === "KRA Linked Accounts";
@@ -733,6 +737,7 @@ function DashboardHome({
           return (
             <div
               key={stat.title}
+              data-tour={isLinkedAccounts ? "stat-linked" : undefined}
               className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex items-center justify-between">
@@ -815,13 +820,12 @@ function DashboardHome({
         })}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section data-tour="quick-actions" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="font-bold text-slate-900">Quick Actions</h3>
         <p className="mt-1 text-xs text-slate-400">Common tasks in Taxflow</p>
 
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           
-          {/* Quick Action (TOUR HOOK) */}
           <div data-tour="create-workflow">
             <QuickAction
               icon={Plus}
@@ -852,7 +856,7 @@ function DashboardHome({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section data-tour="submissions" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="font-bold text-slate-900">Recent Submissions</h3>
@@ -872,7 +876,7 @@ function DashboardHome({
           )}
         </div>
 
-        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 lg:flex-row lg:items-center">
+        <div data-tour="submission-filters" className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 lg:flex-row lg:items-center">
           <div className="relative flex-1">
             <Search
               size={15}
