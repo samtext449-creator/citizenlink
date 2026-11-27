@@ -13,6 +13,30 @@ type TaxInfo = {
   kra_pin: string;
   obligation_status: "Active" | "Inactive";
   holder_full_name: string;
+  // Obligation keys registered on this PIN, e.g. ["income_tax", "vat"]
+  obligations: string[];
+};
+
+// Services a user can automate, and the KRA obligation each one needs.
+// Add more here whenever you launch a new service.
+const SERVICES = [
+  { id: "nil_return", name: "Nil return", obligation: "income_tax", obligationName: "Income Tax" },
+  { id: "income_tax_return", name: "Income tax return", obligation: "income_tax", obligationName: "Income Tax" },
+  { id: "vat_return", name: "VAT return", obligation: "vat", obligationName: "VAT" },
+  { id: "paye_return", name: "PAYE return", obligation: "paye", obligationName: "PAYE" },
+  { id: "mri_return", name: "Monthly rental income return", obligation: "mri", obligationName: "Rental Income" },
+  { id: "turnover_tax", name: "Turnover tax return", obligation: "turnover_tax", obligationName: "Turnover Tax" },
+];
+
+// Test data. Typing this ID number returns a sample PIN so you can try the
+// flow before the real KRA lookup is connected. Remove when going live.
+const TEST_ID = "12345678";
+const TEST_RESULT = {
+  full_name: "SAMUEL CHAGA",
+  kra_pin: "A012345678Z",
+  obligation_status: "Active" as const,
+  holder_full_name: "SAMUEL CHAGA",
+  obligations: ["income_tax"],
 };
 
 // Flat, underline-style fields: no boxes, no cards
@@ -37,8 +61,12 @@ export default function SelfDeclarationPage() {
 
   const [county, setCounty] = useState("");
   const [subCounty, setSubCounty] = useState("");
+  const [buildingName, setBuildingName] = useState("");
   const [poBox, setPoBox] = useState("");
   const [zipCode, setZipCode] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const [serviceId, setServiceId] = useState("");
 
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -84,22 +112,33 @@ export default function SelfDeclarationPage() {
     setVerifying(true);
     setVerifyError("");
     try {
-      // TODO: connect to your KRA / ID lookup.
-      // Expected: { success: true, data: { full_name, kra_pin, obligation_status, holder_full_name } }
-      const res = await fetch("/api/kra/verify-id", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_number: idNumber }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success || !json.data) {
-        throw new Error(json?.message || "We couldn't find tax details for that ID number.");
+      let d: any;
+
+      if (idNumber === TEST_ID) {
+        // Sample data for testing
+        await new Promise((r) => setTimeout(r, 700));
+        d = TEST_RESULT;
+      } else {
+        // TODO: connect to your KRA / ID lookup.
+        // Expected: { success: true, data: { full_name, kra_pin, obligation_status,
+        //             holder_full_name, obligations: ["income_tax", "vat", ...] } }
+        const res = await fetch("/api/kra/verify-id", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id_number: idNumber }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success || !json.data) {
+          throw new Error(json?.message || "We couldn't verify that ID number.");
+        }
+        d = json.data;
       }
-      const d = json.data;
+
       setTaxInfo({
         kra_pin: d.kra_pin,
         obligation_status: d.obligation_status,
         holder_full_name: d.holder_full_name || d.full_name,
+        obligations: d.obligations || [],
       });
       if (d.full_name && !fullName.trim()) setFullName(d.full_name);
       setVerified(true);
@@ -116,8 +155,16 @@ export default function SelfDeclarationPage() {
     /^\S+@\S+\.\S+$/.test(email) &&
     county.trim() !== "" &&
     subCounty.trim() !== "" &&
+    buildingName.trim() !== "" &&
     poBox.trim() !== "" &&
-    zipCode.trim() !== "";
+    zipCode.trim() !== "" &&
+    phone.replace(/\D/g, "").length >= 9;
+
+  // Service eligibility: does this PIN have the obligation the service needs?
+  const selectedService = SERVICES.find((s) => s.id === serviceId) || null;
+  const eligible =
+    !!selectedService && !!taxInfo?.obligations.includes(selectedService.obligation);
+  const notEligible = !!selectedService && !eligible;
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -133,8 +180,11 @@ export default function SelfDeclarationPage() {
           email,
           county,
           sub_county: subCounty,
+          building_name: buildingName,
           po_box: poBox,
           zip_code: zipCode,
+          phone,
+          service: serviceId,
           terms_accepted: true,
         }),
       });
@@ -172,8 +222,8 @@ export default function SelfDeclarationPage() {
               Let's get your tax profile set up.
             </h1>
             <p className="mt-4 max-w-[26ch] text-[15px] leading-relaxed text-slate-300">
-              Give us your ID number and we'll pull your tax details from KRA, so there's
-              nothing to look up.
+              Just a few quick details and you'll be ready to start automating your
+              tax filings.
             </p>
           </div>
         </div>
@@ -191,6 +241,16 @@ export default function SelfDeclarationPage() {
       {/* Form */}
       <main className="flex-1 px-6 py-10 sm:px-12 lg:px-20 lg:py-16">
         <div className="mx-auto max-w-xl">
+          {!done && (
+            <button
+              type="button"
+              onClick={() => router.push(DASHBOARD_ROUTE)}
+              className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+            >
+              <ArrowLeft size={16} />
+              Back
+            </button>
+          )}
           {done ? (
             <div className="pt-8">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-700">
@@ -311,6 +371,17 @@ export default function SelfDeclarationPage() {
                     onChange={(e) => setSubCounty(e.target.value)} placeholder="Westlands" />
                 </div>
                 <div>
+                  <label htmlFor="building_name" className={labelClass}>Building name</label>
+                  <input id="building_name" className={fieldClass} value={buildingName}
+                    onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Rift Plaza" />
+                </div>
+                <div>
+                  <label htmlFor="phone" className={labelClass}>Telephone number</label>
+                  <input id="phone" type="tel" inputMode="tel" className={fieldClass} value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s]/g, ""))}
+                    placeholder="0712 345 678" autoComplete="tel" />
+                </div>
+                <div>
                   <label htmlFor="po_box" className={labelClass}>P.O. Box</label>
                   <input id="po_box" className={fieldClass} value={poBox}
                     onChange={(e) => setPoBox(e.target.value)} placeholder="12345" />
@@ -344,11 +415,10 @@ export default function SelfDeclarationPage() {
           ) : (
             <div>
               <h2 className={`font-serif text-3xl font-medium text-slate-900`}>
-                Here's what we found
+                Your tax details
               </h2>
               <p className="mt-3 text-[15px] text-slate-500">
-                These details came straight from KRA using your ID number, so you can't
-                change them here.
+                These are filled in for you and can't be changed here.
               </p>
 
               <dl className="mt-10 divide-y divide-slate-200 border-y border-slate-200">
@@ -375,6 +445,38 @@ export default function SelfDeclarationPage() {
                   </dd>
                 </div>
               </dl>
+
+              <div className="mt-10">
+                <label htmlFor="service" className={labelClass}>
+                  Service you want to automate
+                </label>
+                <select
+                  id="service"
+                  value={serviceId}
+                  onChange={(e) => setServiceId(e.target.value)}
+                  className={`${fieldClass} cursor-pointer`}
+                >
+                  <option value="">Choose a service</option>
+                  {SERVICES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+
+                {notEligible && selectedService && (
+                  <p className="mt-3 text-sm leading-relaxed text-red-600">
+                    This PIN may not be eligible for {selectedService.name.toLowerCase()}.
+                    It isn't registered for the {selectedService.obligationName} obligation.
+                    Pick another service, or check your obligations on iTax.
+                  </p>
+                )}
+                {eligible && selectedService && (
+                  <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+                    <Check size={15} /> Your PIN can use this service.
+                  </p>
+                )}
+              </div>
 
               <div className="mt-10">
                 <p className="text-[15px] text-slate-600">
@@ -410,7 +512,7 @@ export default function SelfDeclarationPage() {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={!termsAccepted || submitting}
+                  disabled={!eligible || !termsAccepted || submitting}
                   className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-7 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   {submitting && <Loader2 size={16} className="animate-spin" />}
