@@ -2,25 +2,25 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { driver, Driver } from "driver.js";
+import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
-export default function OnboardingTour({ run, onComplete }: { run: boolean, onComplete: () => void }) {
-  // Keep a reference to the driver instance so React doesn't destroy it early
-  const driverRef = useRef<Driver | null>(null);
+export default function OnboardingTour({ run, onComplete }: { run: boolean; onComplete: () => void }) {
+  // Keep a strict reference to the driver instance
+  const driverRef = useRef<any>(null);
 
   useEffect(() => {
+    // If the tour isn't supposed to run, do nothing
     if (!run) return;
 
-    // If a previous instance exists, destroy it first
-    if (driverRef.current) {
-      driverRef.current.destroy();
-    }
+    // If the tour is already running, don't start a second one
+    if (driverRef.current) return;
 
+    // Create the driver instance
     const driverObj = driver({
-      showProgress: true, 
+      showProgress: true,
       animate: true,
-      allowClose: false, 
+      allowClose: false,
       nextBtnText: "Next",
       prevBtnText: "Back",
       doneBtnText: "Got it!",
@@ -28,6 +28,7 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
         onComplete();
         localStorage.setItem("taxflow_tour_completed", "true");
         driverObj.destroy();
+        driverRef.current = null; // Clear the reference
       },
       steps: [
         {
@@ -80,16 +81,16 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
 
     driverRef.current = driverObj;
 
-    // Increased delay to 800ms to ensure the page and data-tour elements are fully rendered
+    // Wait a small moment to ensure the DOM has fully painted the elements
     const timer = setTimeout(() => {
       driverObj.drive();
-    }, 800);
+    }, 1000);
 
     return () => {
       clearTimeout(timer);
-      // DO NOT call driverObj.destroy() here. 
-      // In React Strict Mode, this cleanup runs immediately, which causes the pop-and-disappear.
-      // We let the tour live until the user closes it.
+      // We intentionally DO NOT destroy the driver here. 
+      // Let it run its course. If the component completely unmounts (e.g. user navigates away),
+      // driver.js will handle the cleanup gracefully without crashing React.
     };
   }, [run, onComplete]);
 
