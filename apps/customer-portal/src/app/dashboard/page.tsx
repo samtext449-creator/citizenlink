@@ -32,6 +32,7 @@ import {
   Filter,
   Search,
   TrendingUp,
+  RefreshCw // Added for the reset button
 } from "lucide-react";
 import MySubscriptionPage from "./MySubscription";
 import WorkflowsPage from "./Workflows";
@@ -123,9 +124,9 @@ export default function DashboardPage() {
 
   const currentAccount = "Individual Account";
 
-  // Fetch real user data on mount
+  // 1. Fetch real user data on mount
   useEffect(() => {
-    let isMounted = true; // Guard against Strict Mode unmounts
+    let isMounted = true;
 
     const fetchUser = async () => {
       try {
@@ -143,15 +144,6 @@ export default function DashboardPage() {
           if (data.data.session_expires_at) {
             setExpiresAt(new Date(data.data.session_expires_at).getTime());
           }
-
-          // --- TRIGGER TOUR SAFELY ---
-          const hasSeenTour = localStorage.getItem("taxflow_tour_completed");
-          if (!hasSeenTour && activePage === "Overview") {
-             // Small delay to let the dashboard finish rendering its skeleton
-             setTimeout(() => {
-               if (isMounted) setRunTour(true);
-             }, 1000);
-          }
         }
       } catch (error) {
         console.error("Failed to fetch user session:", error);
@@ -163,9 +155,26 @@ export default function DashboardPage() {
     fetchUser();
 
     return () => {
-      isMounted = false; // Prevent state updates if unmounted
+      isMounted = false; 
     };
-  }, [router]); // REMOVED activePage from dependency array to stop it re-triggering
+  }, [router]);
+
+  // 2. Separate Effect to trigger the tour safely
+  useEffect(() => {
+    // Only trigger when loading is finished and we are on Overview
+    if (!isLoading && activePage === "Overview") {
+      const hasSeenTour = localStorage.getItem("taxflow_tour_completed");
+      
+      if (!hasSeenTour) {
+        // Give the DOM 1.5 seconds to render all the data-tour elements
+        const timer = setTimeout(() => {
+          setRunTour(true);
+        }, 1500);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isLoading, activePage]);
 
   // Watch the session clock
   useEffect(() => {
@@ -185,7 +194,6 @@ export default function DashboardPage() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expiresAt]);
 
   async function handleContinueSession() {
@@ -225,6 +233,13 @@ export default function DashboardPage() {
       router.refresh();
     }
   }
+
+  // Helper for testing the tour
+  const resetTour = () => {
+    localStorage.removeItem("taxflow_tour_completed");
+    setRunTour(false);
+    setTimeout(() => setRunTour(true), 100);
+  };
 
   const fullName =
     user?.full_name ||
@@ -456,6 +471,14 @@ export default function DashboardPage() {
               <User size={16} className="text-slate-700" />
               <span>Individual</span>
             </div>
+
+            {/* DEBUG RESET TOUR BUTTON - Remove in production */}
+            <button 
+              onClick={resetTour} 
+              className="hidden lg:flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
+            >
+              <RefreshCw size={14} /> Reset Tour
+            </button>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
