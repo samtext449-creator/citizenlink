@@ -1,31 +1,36 @@
 // components/OnboardingTour.tsx
 "use client";
 
-import { useEffect } from "react";
-import { driver } from "driver.js";
+import { useEffect, useRef } from "react";
+import { driver, Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
 export default function OnboardingTour({ run, onComplete }: { run: boolean, onComplete: () => void }) {
+  // Keep a reference to the driver instance so React doesn't destroy it early
+  const driverRef = useRef<Driver | null>(null);
+
   useEffect(() => {
     if (!run) return;
 
+    // If a previous instance exists, destroy it first
+    if (driverRef.current) {
+      driverRef.current.destroy();
+    }
+
     const driverObj = driver({
-      showProgress: true, // Shows "1 of 4" at the bottom
+      showProgress: true, 
       animate: true,
-      allowClose: false, // Forces them to click through
+      allowClose: false, 
       nextBtnText: "Next",
       prevBtnText: "Back",
       doneBtnText: "Got it!",
       onDestroyStarted: () => {
-        // Triggered when they finish or skip
         onComplete();
-        // Save to localStorage so they don't see it again on refresh
         localStorage.setItem("taxflow_tour_completed", "true");
         driverObj.destroy();
       },
       steps: [
         {
-          // 1. Sidebar Overview
           element: 'button[data-tour="nav-overview"]',
           popover: {
             title: 'Your Dashboard',
@@ -35,7 +40,6 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
           }
         },
         {
-          // 2. The Welcome Banner
           element: '[data-tour="welcome"]',
           popover: {
             title: 'Welcome to Taxflow 👋',
@@ -45,7 +49,6 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
           }
         },
         {
-          // 3. The Quick Action
           element: '[data-tour="create-workflow"]',
           popover: {
             title: 'Start Automating',
@@ -55,7 +58,6 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
           }
         },
         {
-          // 4. The User Profile
           element: '[data-tour="profile-menu"]',
           popover: {
             title: 'Your Account',
@@ -65,7 +67,6 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
           }
         },
         {
-          // 5. Solara AI
           element: '[data-tour="solara"]',
           popover: {
             title: 'Meet Solara AI 🤖',
@@ -77,12 +78,19 @@ export default function OnboardingTour({ run, onComplete }: { run: boolean, onCo
       ]
     });
 
-    // Small delay to ensure the page is fully loaded before highlighting
-    setTimeout(() => {
-      driverObj.drive();
-    }, 500);
+    driverRef.current = driverObj;
 
-    return () => driverObj.destroy();
+    // Increased delay to 800ms to ensure the page and data-tour elements are fully rendered
+    const timer = setTimeout(() => {
+      driverObj.drive();
+    }, 800);
+
+    return () => {
+      clearTimeout(timer);
+      // DO NOT call driverObj.destroy() here. 
+      // In React Strict Mode, this cleanup runs immediately, which causes the pop-and-disappear.
+      // We let the tour live until the user closes it.
+    };
   }, [run, onComplete]);
 
   return null;

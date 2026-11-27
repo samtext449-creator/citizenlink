@@ -42,7 +42,7 @@ import LinkedAccountsPage from "./LinkedAccounts";
 import ProfilePage from "./Profile";
 import HelpSupportPage from "./HelpSupport";
 import SolaraAgent from "./SolaraAgent"; 
-import OnboardingTour from "../../components/OnboardingTour"; // IMPORT TOUR
+import OnboardingTour from "../../components/OnboardingTour"; 
 
 // --------------------------------------------------
 // Navigation configuration
@@ -125,6 +125,8 @@ export default function DashboardPage() {
 
   // Fetch real user data on mount
   useEffect(() => {
+    let isMounted = true; // Guard against Strict Mode unmounts
+
     const fetchUser = async () => {
       try {
         const res = await fetch("/api/auth/me");
@@ -136,27 +138,34 @@ export default function DashboardPage() {
 
         const data = await res.json();
 
-        if (data.success && data.data) {
+        if (data.success && data.data && isMounted) {
           setUser(data.data);
           if (data.data.session_expires_at) {
             setExpiresAt(new Date(data.data.session_expires_at).getTime());
           }
 
-          // --- TRIGGER TOUR ---
+          // --- TRIGGER TOUR SAFELY ---
           const hasSeenTour = localStorage.getItem("taxflow_tour_completed");
           if (!hasSeenTour && activePage === "Overview") {
-            setRunTour(true);
+             // Small delay to let the dashboard finish rendering its skeleton
+             setTimeout(() => {
+               if (isMounted) setRunTour(true);
+             }, 1000);
           }
         }
       } catch (error) {
         console.error("Failed to fetch user session:", error);
       } finally {
-        setTimeout(() => setIsLoading(false), 800);
+        if (isMounted) setTimeout(() => setIsLoading(false), 800);
       }
     };
 
     fetchUser();
-  }, [router, activePage]);
+
+    return () => {
+      isMounted = false; // Prevent state updates if unmounted
+    };
+  }, [router]); // REMOVED activePage from dependency array to stop it re-triggering
 
   // Watch the session clock
   useEffect(() => {
@@ -344,13 +353,13 @@ export default function DashboardPage() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = activePage === item.name;
-              const isOverview = item.name === "Overview"; // Used for Tour
+              const isOverview = item.name === "Overview"; 
 
               return (
                 <button
                   key={item.name}
                   onClick={() => handleNavigation(item.name)}
-                  data-tour={isOverview ? "nav-overview" : undefined} // TOUR HOOK
+                  data-tour={isOverview ? "nav-overview" : undefined} 
                   className={`
                     group flex w-full items-center gap-3 rounded-xl
                     px-3 py-3 text-sm font-medium transition-all
