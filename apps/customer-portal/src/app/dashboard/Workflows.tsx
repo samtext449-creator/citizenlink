@@ -100,11 +100,12 @@ const PIN_FORMAT = /^[AP]\d{9}[A-Z]$/;
 const maskPin = (pin: string) => `${pin.slice(0, 3)}•••••••${pin.slice(-1)}`;
 const money = (n: number) => `KSh ${n.toLocaleString("en-KE")}`;
 
-// Palette: warm paper, one ink colour, one quiet green accent.
+// Palette: matches the dashboard (cool slate neutrals, white cards)
 const INK = "#0B1B36";
-const PAPER = "#FBFAF8";
-const LINE = "#E6E2DB";
-const MUTED = "#6F6A62";
+const PAGE_BG = "#F8FAFC"; // set to your dashboard/layout background colour (used for the carousel edge fade)
+const LINE = "#E2E8F0"; // slate-200
+const MUTED = "#64748B"; // slate-500
+const BORDER = "#CBD5E1"; // slate-300
 
 // Rank templates against free text the person typed
 function matchTemplates(text: string) {
@@ -319,18 +320,18 @@ function AssistantChat({
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-7rem)] rounded-2xl" style={{ backgroundColor: PAPER }}>
+    <div className="flex min-h-[calc(100vh-7rem)] rounded-2xl">
       {/* ---------------- Light sidebar ---------------- */}
       {sidebarOpen && (
         <aside
           className="sticky top-28 hidden max-h-[calc(100vh-8rem)] w-[250px] shrink-0 flex-col self-start overflow-hidden rounded-l-2xl md:flex"
-          style={{ backgroundColor: "#F4F1EB", borderRight: `1px solid ${LINE}` }}
+          style={{ backgroundColor: "#F1F5F9", borderRight: `1px solid ${LINE}` }}
         >
           <div className="p-3">
             <button
               onClick={newChat}
-              className="flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-sm font-semibold transition hover:bg-[#FBFAF8]"
-              style={{ border: "1px solid #D8D3CB", color: INK }}
+              className="flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-sm font-semibold transition hover:bg-[#F8FAFC]"
+              style={{ border: `1px solid ${BORDER}`, color: INK }}
             >
               <Plus size={16} /> New chat
             </button>
@@ -349,7 +350,7 @@ function AssistantChat({
                     <button
                       onClick={() => setActiveId(th.id)}
                       className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 pr-8 text-left text-[13px] transition ${
-                        isActive ? "bg-white font-semibold shadow-[0_1px_2px_rgba(11,27,54,0.06)]" : "hover:bg-[#EBE7DF]"
+                        isActive ? "bg-white font-semibold shadow-[0_1px_2px_rgba(11,27,54,0.06)]" : "hover:bg-[#E2E8F0]"
                       }`}
                       style={{ color: INK }}
                     >
@@ -359,7 +360,7 @@ function AssistantChat({
                     <button
                       onClick={() => deleteThread(th.id)}
                       aria-label={`Delete ${th.title}`}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 opacity-0 transition hover:bg-[#E3DED5] group-hover:opacity-100 focus:opacity-100"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 opacity-0 transition hover:bg-[#CBD5E1] group-hover:opacity-100 focus:opacity-100"
                       style={{ color: MUTED }}
                     >
                       <Trash2 size={13} />
@@ -378,7 +379,7 @@ function AssistantChat({
                   key={q}
                   onClick={() => !pending && send(q)}
                   disabled={pending}
-                  className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[#EBE7DF] disabled:opacity-50"
+                  className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[#E2E8F0] disabled:opacity-50"
                   style={{ color: MUTED }}
                 >
                   {q}
@@ -396,7 +397,7 @@ function AssistantChat({
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            className="hidden rounded p-1 transition hover:bg-[#EBE7DF] md:inline-flex"
+            className="hidden rounded p-1 transition hover:bg-[#E2E8F0] md:inline-flex"
             style={{ color: MUTED }}
           >
             {sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
@@ -407,7 +408,7 @@ function AssistantChat({
           <button
             onClick={newChat}
             className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[13px] font-semibold md:hidden"
-            style={{ border: "1px solid #D8D3CB" }}
+            style={{ border: `1px solid ${BORDER}` }}
           >
             <Plus size={14} /> New
           </button>
@@ -432,8 +433,8 @@ function AssistantChat({
                   <button
                     key={q}
                     onClick={() => send(q)}
-                    className="rounded-full bg-white px-4 py-2 text-[13px] font-medium transition hover:bg-[#F6F4F0]"
-                    style={{ border: "1px solid #D8D3CB", color: INK }}
+                    className="rounded-full bg-white px-4 py-2 text-[13px] font-medium transition hover:bg-[#F1F5F9]"
+                    style={{ border: `1px solid ${BORDER}`, color: INK }}
                   >
                     {q}
                   </button>
@@ -445,7 +446,7 @@ function AssistantChat({
           {messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
-                <div className="max-w-[80%] rounded-md px-4 py-2.5 text-[15px]" style={{ backgroundColor: "#EFEBE4", border: `1px solid ${LINE}`, color: INK }}>
+                <div className="max-w-[80%] rounded-md px-4 py-2.5 text-[15px]" style={{ backgroundColor: "#F1F5F9", border: `1px solid ${LINE}`, color: INK }}>
                   {m.text}
                 </div>
               </div>
@@ -487,8 +488,8 @@ function AssistantChat({
                         <button
                           key={t.id}
                           onClick={() => onStartSetup(t.id)}
-                          className={`inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold transition ${i === 0 ? "text-white hover:opacity-90" : "hover:bg-[#F6F4F0]"}`}
-                          style={i === 0 ? { backgroundColor: INK } : { border: "1px solid #D8D3CB", color: INK }}
+                          className={`inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold transition ${i === 0 ? "text-white hover:opacity-90" : "hover:bg-[#F1F5F9]"}`}
+                          style={i === 0 ? { backgroundColor: INK } : { border: `1px solid ${BORDER}`, color: INK }}
                         >
                           Set up {t.name.replace("Automate ", "")} <ArrowRight size={15} />
                         </button>
@@ -542,14 +543,14 @@ function AssistantChat({
               }}
               rows={3}
               placeholder="Chat with Solara AI"
-              className="block w-full resize-none bg-transparent px-3.5 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#8B867D]"
+              className="block w-full resize-none bg-transparent px-3.5 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#94A3B8]"
             />
             <div className="flex justify-end px-3 pb-3">
               <button
                 onClick={submitInput}
                 disabled={pending || !input.trim()}
                 aria-label="Send"
-                className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#ECE8E1] disabled:text-[#A29D93]"
+                className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#E2E8F0] disabled:text-[#94A3B8]"
                 style={{ backgroundColor: INK }}
               >
                 <ArrowUp size={15} />
@@ -696,7 +697,7 @@ export default function WorkflowsPage({
   return (
     <>
     {setupOverlay}
-    <div className="space-y-12 rounded-2xl pb-10" style={{ backgroundColor: PAPER }}>
+    <div className="space-y-12 pb-10">
       {/* ---------------- Hero ---------------- */}
       <section className="relative px-4 pt-14 sm:pt-16">
         {/* faint dot field that fades out toward the edges */}
@@ -704,7 +705,7 @@ export default function WorkflowsPage({
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
-            backgroundImage: "radial-gradient(rgba(11,27,54,0.16) 1px, transparent 1px)",
+            backgroundImage: "radial-gradient(rgba(11,27,54,0.10) 1px, transparent 1px)",
             backgroundSize: "14px 14px",
             WebkitMaskImage: "radial-gradient(ellipse 60% 70% at 50% 45%, #000 10%, transparent 75%)",
             maskImage: "radial-gradient(ellipse 60% 70% at 50% 45%, #000 10%, transparent 75%)",
@@ -722,7 +723,7 @@ export default function WorkflowsPage({
           <div className="relative mt-8">
             <div
               className="rounded-md bg-white shadow-[0_1px_2px_rgba(11,27,54,0.05)] transition-colors focus-within:border-[#0B1B36]"
-              style={{ border: `1px solid #D8D3CB` }}
+              style={{ border: `1px solid ${BORDER}` }}
             >
               <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${LINE}` }}>
                 <span className="flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: INK }}>
@@ -745,7 +746,7 @@ export default function WorkflowsPage({
                 }}
                 rows={3}
                 placeholder="Enter a tax type or describe what to file, e.g. monthly rental income"
-                className="block w-full resize-none bg-transparent px-3 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#8B867D]"
+                className="block w-full resize-none bg-transparent px-3 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#94A3B8]"
               />
 
               <div className="flex justify-end px-3 pb-3">
@@ -753,7 +754,7 @@ export default function WorkflowsPage({
                   onClick={submitPrompt}
                   disabled={!prompt.trim()}
                   aria-label="Start automation"
-                  className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#ECE8E1] disabled:text-[#A29D93]"
+                  className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#E2E8F0] disabled:text-[#94A3B8]"
                   style={{ backgroundColor: INK }}
                 >
                   <ArrowUp size={15} />
@@ -768,7 +769,7 @@ export default function WorkflowsPage({
                     key={t.id}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => { startSetup(t.id); setPrompt(""); }}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F6F4F0]"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F1F5F9]"
                     style={i > 0 ? { borderTop: `1px solid ${LINE}` } : undefined}
                   >
                     <span>
@@ -806,7 +807,7 @@ export default function WorkflowsPage({
                 key={s.title}
                 onClick={s.onClick}
                 disabled={s.disabled}
-                className="flex items-center gap-3 rounded-md bg-white px-4 py-4 text-left transition hover:border-[#C7C1B6] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[#E6E2DB]"
+                className="flex items-center gap-3 rounded-md bg-white px-4 py-4 text-left transition hover:border-[#94A3B8] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[#E2E8F0]"
                 style={{ border: `1px solid ${LINE}` }}
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ backgroundColor: "#E6EEE8", color: "#1E6B4F" }}>
@@ -865,11 +866,11 @@ export default function WorkflowsPage({
               if (isLoading) {
                 return (
                   <div key={g.id} className="w-[300px] shrink-0 snap-start overflow-hidden rounded-md bg-white" style={{ border: `1px solid ${LINE}` }}>
-                    <div className="h-[134px] animate-pulse bg-[#ECE8E1]" />
+                    <div className="h-[134px] animate-pulse bg-[#E2E8F0]" />
                     <div className="animate-pulse p-4">
-                      <div className="h-4 w-11/12 rounded bg-[#ECE8E1]" />
-                      <div className="mt-2 h-4 w-2/3 rounded bg-[#ECE8E1]" />
-                      <div className="mt-5 h-3 w-1/2 rounded bg-[#ECE8E1]" />
+                      <div className="h-4 w-11/12 rounded bg-[#E2E8F0]" />
+                      <div className="mt-2 h-4 w-2/3 rounded bg-[#E2E8F0]" />
+                      <div className="mt-5 h-3 w-1/2 rounded bg-[#E2E8F0]" />
                     </div>
                   </div>
                 );
@@ -879,7 +880,7 @@ export default function WorkflowsPage({
                 <button
                   key={g.id}
                   onClick={() => startSetup(g.templateId)}
-                  className="group w-[300px] shrink-0 snap-start overflow-hidden rounded-md bg-white text-left transition hover:border-[#C7C1B6] hover:shadow-[0_4px_14px_rgba(11,27,54,0.07)]"
+                  className="group w-[300px] shrink-0 snap-start overflow-hidden rounded-md bg-white text-left transition hover:border-[#94A3B8] hover:shadow-[0_4px_14px_rgba(11,27,54,0.07)]"
                   style={{ border: `1px solid ${LINE}` }}
                 >
                   <div
@@ -920,13 +921,13 @@ export default function WorkflowsPage({
 
           {/* edge fade + arrows */}
           {rail.right && (
-            <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-20" style={{ background: `linear-gradient(to right, transparent, ${PAPER})` }} />
+            <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-20" style={{ background: `linear-gradient(to right, transparent, ${PAGE_BG})` }} />
           )}
           {rail.left && (
             <button
               onClick={() => scrollRail(-1)}
               aria-label="Scroll left"
-              className="absolute left-0 top-[67px] z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-md transition hover:bg-[#F6F4F0]"
+              className="absolute left-0 top-[67px] z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-md transition hover:bg-[#F1F5F9]"
               style={{ border: `1px solid ${LINE}`, color: INK }}
             >
               <ChevronLeft size={18} />
@@ -936,7 +937,7 @@ export default function WorkflowsPage({
             <button
               onClick={() => scrollRail(1)}
               aria-label="Scroll right"
-              className="absolute right-0 top-[67px] z-10 flex h-9 w-9 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-md transition hover:bg-[#F6F4F0]"
+              className="absolute right-0 top-[67px] z-10 flex h-9 w-9 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-md transition hover:bg-[#F1F5F9]"
               style={{ border: `1px solid ${LINE}`, color: INK }}
             >
               <ChevronRight size={18} />
@@ -971,8 +972,8 @@ export default function WorkflowsPage({
               </p>
               <button
                 onClick={() => railRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                className="mt-4 rounded px-4 py-2 text-sm font-semibold transition hover:bg-[#F6F4F0]"
-                style={{ border: `1px solid #D8D3CB`, color: INK }}
+                className="mt-4 rounded px-4 py-2 text-sm font-semibold transition hover:bg-[#F1F5F9]"
+                style={{ border: `1px solid ${BORDER}`, color: INK }}
               >
                 Browse templates
               </button>
@@ -984,7 +985,7 @@ export default function WorkflowsPage({
                 return (
                   <div
                     key={w.id}
-                    className="flex flex-col gap-4 p-5 transition hover:bg-[#FAF9F6] md:flex-row md:items-center md:justify-between"
+                    className="flex flex-col gap-4 p-5 transition hover:bg-[#F8FAFC] md:flex-row md:items-center md:justify-between"
                     style={i > 0 ? { borderTop: `1px solid ${LINE}` } : undefined}
                   >
                     <div className="flex min-w-0 items-start gap-3">
@@ -1000,7 +1001,7 @@ export default function WorkflowsPage({
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>
-                      {w.status === "active" && <button className="rounded px-4 py-2 text-sm font-semibold transition hover:bg-[#F6F4F0]" style={{ border: "1px solid #D8D3CB", color: INK }}>Manage</button>}
+                      {w.status === "active" && <button className="rounded px-4 py-2 text-sm font-semibold transition hover:bg-[#F1F5F9]" style={{ border: `1px solid ${BORDER}`, color: INK }}>Manage</button>}
                       {w.status === "draft" && <button onClick={() => startSetup(w.templateId, w)} className="rounded px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: INK }}>Continue setup</button>}
                       {w.status === "attention" && <button onClick={onGoToPricing} className="rounded px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: INK }}>Renew service</button>}
                     </div>
