@@ -6,6 +6,7 @@ import {
   Activity,
   AlertCircle,
   ArrowRight,
+  BadgeCheck,
   Bell,
   CheckCircle2,
   ChevronDown,
@@ -13,6 +14,7 @@ import {
   Clock3,
   CreditCard,
   FileCheck2,
+  FileText,
   FolderOpen,
   House,
   Link2,
@@ -26,7 +28,6 @@ import {
   UserRound,
   Workflow,
   X,
-  Building2,
   User,
   Filter,
   Search,
@@ -34,7 +35,8 @@ import {
 } from "lucide-react";
 import MySubscriptionPage from "./MySubscription";
 import WorkflowsPage from "./Workflows";
-import DocumentsPage from "./Documents";
+import MyTaxProfilePage from "./MyTaxProfile";
+import KRAVerificationPage from "./KRAVerification";
 import SubmissionsPage from "./Submissions";
 import LinkedAccountsPage from "./LinkedAccounts";
 import ProfilePage from "./Profile";
@@ -46,7 +48,8 @@ import HelpSupportPage from "./HelpSupport";
 const navigation = [
   { name: "Overview", icon: House },
   { name: "Workflows", icon: Workflow },
-  { name: "Documents", icon: FolderOpen },
+  { name: "My Tax Profile", icon: FileText },
+  { name: "KRA Verification", icon: BadgeCheck },
   { name: "My Submissions", icon: FileCheck2 },
   { name: "Linked Accounts", icon: Link2 },
   { name: "My Subscription", icon: CreditCard },
@@ -115,8 +118,8 @@ export default function DashboardPage() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [extending, setExtending] = useState(false);
 
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [currentAccount, setCurrentAccount] = useState("Individual Account");
+  // Only individual accounts are supported
+  const currentAccount = "Individual Account";
 
   // Fetch real user data on mount
   useEffect(() => {
@@ -136,12 +139,6 @@ export default function DashboardPage() {
           setUser(data.data);
           if (data.data.session_expires_at) {
             setExpiresAt(new Date(data.data.session_expires_at).getTime());
-          }
-          // Set account type based on backend response
-          if (data.data.account_type === "Business") {
-            setCurrentAccount("Business Account");
-          } else {
-            setCurrentAccount("Individual Account");
           }
         }
       } catch (error) {
@@ -201,7 +198,6 @@ export default function DashboardPage() {
     setMobileOpen(false);
     setProfileOpen(false);
     setNotificationsOpen(false);
-    setAccountOpen(false);
   }
 
   async function handleSignOut() {
@@ -406,12 +402,12 @@ export default function DashboardPage() {
             className="flex h-9 items-center justify-center gap-3 border-b border-yellow-300 bg-yellow-100 px-4"
           >
             <AlertCircle size={17} className="shrink-0 text-yellow-700" />
-            <p className="truncate text-[13px] font-bold uppercase tracking-wide text-yellow-900 sm:text-sm">
+            <p className="truncate text-[13px] font-semibold text-yellow-900">
               To start your journey of automation, complete your profile
             </p>
             <button
               onClick={() => handleNavigation("Profile")}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-xs font-semibold text-yellow-950 transition hover:bg-yellow-500"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
             >
               Complete Profile
               <ArrowRight size={13} />
@@ -429,62 +425,9 @@ export default function DashboardPage() {
               <Menu size={22} />
             </button>
 
-            <div>
-              <div className="relative inline-block">
-                <button
-                  onClick={() => {
-                    setAccountOpen(!accountOpen);
-                    setProfileOpen(false);
-                    setNotificationsOpen(false);
-                  }}
-                  className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-                >
-                  <span>
-                    {currentAccount === "Individual Account"
-                      ? "Individual"
-                      : "Business"}
-                  </span>
-                  <ChevronDown size={16} className="text-slate-700" />
-                </button>
-
-                {accountOpen && (
-                  <div className="absolute left-0 top-12 z-50 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                    <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Switch Account
-                    </p>
-
-                    <button
-                      onClick={() => {
-                        setCurrentAccount("Individual Account");
-                        setAccountOpen(false);
-                      }}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition ${
-                        currentAccount === "Individual Account"
-                          ? "bg-blue-50 text-blue-900 font-semibold"
-                          : "text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <User size={15} />
-                      Individual Account
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setCurrentAccount("Business Account");
-                        setAccountOpen(false);
-                      }}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition ${
-                        currentAccount === "Business Account"
-                          ? "bg-blue-50 text-blue-900 font-semibold"
-                          : "text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <Building2 size={15} />
-                      Business Account
-                    </button>
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm">
+              <User size={16} className="text-slate-700" />
+              <span>Individual</span>
             </div>
           </div>
 
@@ -495,7 +438,6 @@ export default function DashboardPage() {
                 onClick={() => {
                   setNotificationsOpen(!notificationsOpen);
                   setProfileOpen(false);
-                  setAccountOpen(false);
                 }}
                 className="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100"
                 aria-label="Notifications"
@@ -532,7 +474,6 @@ export default function DashboardPage() {
                 onClick={() => {
                   setProfileOpen(!profileOpen);
                   setNotificationsOpen(false);
-                  setAccountOpen(false);
                 }}
                 className="flex items-center gap-2 rounded-xl p-1.5 transition hover:bg-slate-100 sm:gap-3"
               >
@@ -597,8 +538,10 @@ export default function DashboardPage() {
             <WorkflowsPage
               onGoToPricing={() => handleNavigation("My Subscription")}
             />
-          ) : activePage === "Documents" ? (
-            <DocumentsPage />
+          ) : activePage === "My Tax Profile" ? (
+            <MyTaxProfilePage onNavigate={handleNavigation} />
+          ) : activePage === "KRA Verification" ? (
+            <KRAVerificationPage />
           ) : activePage === "My Submissions" ? (
             <SubmissionsPage
               onGoToPricing={() => handleNavigation("My Subscription")}
@@ -821,7 +764,7 @@ function DashboardHome({
         <h3 className="font-bold text-slate-900">Quick Actions</h3>
         <p className="mt-1 text-xs text-slate-400">Common tasks in Taxflow</p>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <QuickAction
             icon={Plus}
             title="Create Workflow"
@@ -833,12 +776,6 @@ function DashboardHome({
             title="Link KRA Account"
             description="Connect a taxpayer account"
             onClick={() => onNavigate("Linked Accounts")}
-          />
-          <QuickAction
-            icon={FolderOpen}
-            title="View Documents"
-            description="Access your tax documents"
-            onClick={() => onNavigate("Documents")}
           />
           <QuickAction
             icon={FileCheck2}
@@ -1060,8 +997,8 @@ function DashboardSkeleton() {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="h-5 w-32 bg-slate-200 rounded mb-2"></div>
         <div className="h-4 w-48 bg-slate-100 rounded mb-6"></div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((i) => (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
               className="h-20 rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex items-center gap-3"

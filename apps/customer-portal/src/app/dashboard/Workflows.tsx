@@ -19,9 +19,13 @@ import {
   Lock,
   Mail,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
   Smartphone,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   Workflow as WorkflowIcon,
   X,
   AlertCircle,
@@ -192,6 +196,20 @@ function renderBullet(b: string) {
   return b;
 }
 
+type ChatThread = { id: number; title: string; messages: ChatMsg[] };
+
+const QUICK_PROMPTS = [
+  "File monthly nil returns",
+  "Rental income tax",
+  "Calculate VAT from sales",
+  "Prepare PAYE from payroll",
+];
+
+function threadTitle(text: string) {
+  const t = text.trim().replace(/\s+/g, " ");
+  return t.length > 30 ? `${t.slice(0, 30)}…` : t;
+}
+
 function AssistantChat({
   initialPrompt,
   onBack,
@@ -201,40 +219,91 @@ function AssistantChat({
   onBack: () => void;
   onStartSetup: (templateId: string) => void;
 }) {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [pending, setPending] = useState(false);
+  const [threads, setThreads] = useState<ChatThread[]>([{ id: 1, title: "New chat", messages: [] }]);
+  const [activeId, setActiveId] = useState(1);
+  const [pendingIds, setPendingIds] = useState<number[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [vote, setVote] = useState<Record<number, "up" | "down" | null>>({});
   const [copied, setCopied] = useState<number | null>(null);
   const idRef = useRef(0);
+  const threadRef = useRef(1);
   const started = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
 
-  function send(text: string) {
+  const active = threads.find((t) => t.id === activeId) ?? threads[0];
+  const messages = active.messages;
+  const pending = pendingIds.includes(active.id);
+
+  function send(text: string, threadId: number = active.id) {
     const t = text.trim();
     if (!t) return;
     const uid = ++idRef.current;
-    setMessages((m) => [...m, { id: uid, role: "user", text: t }]);
-    setPending(true);
+
+    setThreads((ts) =>
+      ts.map((th) =>
+        th.id === threadId
+          ? {
+              ...th,
+              title: th.messages.length === 0 ? threadTitle(t) : th.title,
+              messages: [...th.messages, { id: uid, role: "user", text: t }],
+            }
+          : th
+      )
+    );
+    setPendingIds((p) => [...p, threadId]);
+
     const seconds = 2 + Math.floor(Math.random() * 3);
     setTimeout(() => {
       const reply = buildReply(t);
       const aid = ++idRef.current;
-      setMessages((m) => [...m, { id: aid, role: "assistant", text: replyToText(reply), reply, seconds }]);
-      setPending(false);
+      setThreads((ts) =>
+        ts.map((th) =>
+          th.id === threadId
+            ? { ...th, messages: [...th.messages, { id: aid, role: "assistant", text: replyToText(reply), reply, seconds }] }
+            : th
+        )
+      );
+      setPendingIds((p) => p.filter((id) => id !== threadId));
     }, seconds * 1000);
   }
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    send(initialPrompt);
+    send(initialPrompt, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, pending]);
+  }, [threads, activeId, pendingIds]);
+
+  function newChat() {
+    // Reuse an empty chat instead of piling up blank ones
+    const empty = threads.find((t) => t.messages.length === 0);
+    if (empty) {
+      setActiveId(empty.id);
+    } else {
+      const id = ++threadRef.current;
+      setThreads((ts) => [{ id, title: "New chat", messages: [] }, ...ts]);
+      setActiveId(id);
+    }
+    setInput("");
+  }
+
+  function deleteThread(id: number) {
+    const rest = threads.filter((t) => t.id !== id);
+    if (rest.length === 0) {
+      const nid = ++threadRef.current;
+      setThreads([{ id: nid, title: "New chat", messages: [] }]);
+      setActiveId(nid);
+    } else {
+      setThreads(rest);
+      if (id === activeId) setActiveId(rest[0].id);
+    }
+  }
 
   function copy(m: ChatMsg) {
     try { navigator.clipboard?.writeText(m.text); } catch {}
@@ -242,137 +311,250 @@ function AssistantChat({
     setTimeout(() => setCopied(null), 1500);
   }
 
+  function submitInput() {
+    if (!pending && input.trim()) {
+      send(input);
+      setInput("");
+    }
+  }
+
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-[790px] flex-col rounded-2xl px-1 pb-4" style={{ backgroundColor: PAPER }}>
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 pt-1 text-sm" style={{ color: INK }}>
-        <button onClick={onBack} className="font-medium underline underline-offset-2">Home</button>
-        <ChevronRight size={16} style={{ color: MUTED }} />
-        <span className="font-semibold">Build with Solara AI</span>
-      </nav>
+    <div className="flex min-h-[calc(100vh-7rem)] rounded-2xl" style={{ backgroundColor: PAPER }}>
+      {/* ---------------- Light sidebar ---------------- */}
+      {sidebarOpen && (
+        <aside
+          className="sticky top-28 hidden max-h-[calc(100vh-8rem)] w-[250px] shrink-0 flex-col self-start overflow-hidden rounded-l-2xl md:flex"
+          style={{ backgroundColor: "#F4F1EB", borderRight: `1px solid ${LINE}` }}
+        >
+          <div className="p-3">
+            <button
+              onClick={newChat}
+              className="flex w-full items-center gap-2 rounded-md bg-white px-3 py-2.5 text-sm font-semibold transition hover:bg-[#FBFAF8]"
+              style={{ border: "1px solid #D8D3CB", color: INK }}
+            >
+              <Plus size={16} /> New chat
+            </button>
+          </div>
 
-      {/* Header */}
-      <div className="mt-4 flex items-center gap-2 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
-        <span className="flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: INK }}>
-          <WorkflowIcon size={12} className="text-white" />
-        </span>
-        <span className="text-sm font-semibold" style={{ color: INK }}>Solara AI</span>
-      </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+            <p className="px-2 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+              Recent
+            </p>
 
-      {/* Conversation */}
-      <div className="flex-1 space-y-8 px-1 pt-6">
-        {messages.map((m) =>
-          m.role === "user" ? (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[80%] rounded-md px-4 py-2.5 text-[15px]" style={{ backgroundColor: "#EFEBE4", border: `1px solid ${LINE}`, color: INK }}>
-                {m.text}
+            <ul className="space-y-0.5">
+              {threads.map((th) => {
+                const isActive = th.id === active.id;
+                return (
+                  <li key={th.id} className="group relative">
+                    <button
+                      onClick={() => setActiveId(th.id)}
+                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 pr-8 text-left text-[13px] transition ${
+                        isActive ? "bg-white font-semibold shadow-[0_1px_2px_rgba(11,27,54,0.06)]" : "hover:bg-[#EBE7DF]"
+                      }`}
+                      style={{ color: INK }}
+                    >
+                      <MessageSquare size={14} className="shrink-0" style={{ color: MUTED }} />
+                      <span className="truncate">{th.title}</span>
+                    </button>
+                    <button
+                      onClick={() => deleteThread(th.id)}
+                      aria-label={`Delete ${th.title}`}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 opacity-0 transition hover:bg-[#E3DED5] group-hover:opacity-100 focus:opacity-100"
+                      style={{ color: MUTED }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="px-2 pb-2 pt-6 text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
+              Try asking
+            </p>
+            <div className="space-y-1">
+              {QUICK_PROMPTS.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => !pending && send(q)}
+                  disabled={pending}
+                  className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] transition hover:bg-[#EBE7DF] disabled:opacity-50"
+                  style={{ color: MUTED }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* ---------------- Chat column ---------------- */}
+      <div className="mx-auto flex min-w-0 max-w-[790px] flex-1 flex-col px-4 pb-4">
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-2 pt-1 text-sm" style={{ color: INK }}>
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            className="hidden rounded p-1 transition hover:bg-[#EBE7DF] md:inline-flex"
+            style={{ color: MUTED }}
+          >
+            {sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+          </button>
+          <button onClick={onBack} className="font-medium underline underline-offset-2">Home</button>
+          <ChevronRight size={16} style={{ color: MUTED }} />
+          <span className="font-semibold">Build with Solara AI</span>
+          <button
+            onClick={newChat}
+            className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[13px] font-semibold md:hidden"
+            style={{ border: "1px solid #D8D3CB" }}
+          >
+            <Plus size={14} /> New
+          </button>
+        </nav>
+
+        {/* Header */}
+        <div className="mt-4 flex items-center gap-2 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
+          <span className="flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: INK }}>
+            <WorkflowIcon size={12} className="text-white" />
+          </span>
+          <span className="text-sm font-semibold" style={{ color: INK }}>Solara AI</span>
+        </div>
+
+        {/* Conversation */}
+        <div className="flex-1 space-y-8 px-1 pt-6">
+          {messages.length === 0 && !pending && (
+            <div className="py-10 text-center">
+              <h2 className="text-xl font-medium" style={{ color: INK }}>What are we automating?</h2>
+              <p className="mt-2 text-sm" style={{ color: MUTED }}>Pick an idea or describe your own below.</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {QUICK_PROMPTS.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => send(q)}
+                    className="rounded-full bg-white px-4 py-2 text-[13px] font-medium transition hover:bg-[#F6F4F0]"
+                    style={{ border: "1px solid #D8D3CB", color: INK }}
+                  >
+                    {q}
+                  </button>
+                ))}
               </div>
             </div>
-          ) : (
-            <div key={m.id}>
-              <button
-                onClick={() => setOpen((o) => ({ ...o, [m.id]: !o[m.id] }))}
-                className="flex items-center gap-1 text-[13px]"
-                style={{ color: MUTED }}
-              >
-                Worked for <strong className="font-semibold">{m.seconds} seconds</strong>
-                <ChevronRight size={14} className={`transition-transform ${open[m.id] ? "rotate-90" : ""}`} />
-              </button>
-              {open[m.id] && (
-                <ul className="ml-1 mt-2 space-y-1 pl-3 text-[13px]" style={{ borderLeft: `2px solid ${LINE}`, color: MUTED }}>
-                  {m.reply!.steps.map((st) => (<li key={st}>{st}</li>))}
-                </ul>
-              )}
+          )}
 
-              <div className="mt-6 text-[15px] leading-relaxed" style={{ color: "#2A2F3A" }}>
-                <p>{m.reply!.intro}</p>
-                {m.reply!.bullets && (
-                  <ul className="mt-3 list-disc space-y-1.5 pl-5 marker:text-[#2A2F3A]">
-                    {m.reply!.bullets.map((b) => (<li key={b}>{renderBullet(b)}</li>))}
+          {messages.map((m) =>
+            m.role === "user" ? (
+              <div key={m.id} className="flex justify-end">
+                <div className="max-w-[80%] rounded-md px-4 py-2.5 text-[15px]" style={{ backgroundColor: "#EFEBE4", border: `1px solid ${LINE}`, color: INK }}>
+                  {m.text}
+                </div>
+              </div>
+            ) : (
+              <div key={m.id}>
+                <button
+                  onClick={() => setOpen((o) => ({ ...o, [m.id]: !o[m.id] }))}
+                  className="flex items-center gap-1 text-[13px]"
+                  style={{ color: MUTED }}
+                >
+                  Worked for <strong className="font-semibold">{m.seconds} seconds</strong>
+                  <ChevronRight size={14} className={`transition-transform ${open[m.id] ? "rotate-90" : ""}`} />
+                </button>
+                {open[m.id] && (
+                  <ul className="ml-1 mt-2 space-y-1 pl-3 text-[13px]" style={{ borderLeft: `2px solid ${LINE}`, color: MUTED }}>
+                    {m.reply!.steps.map((st) => (<li key={st}>{st}</li>))}
                   </ul>
                 )}
-                {m.reply!.notes && (
-                  <>
-                    <p className="mt-4">{m.reply!.notesTitle}</p>
+
+                <div className="mt-6 text-[15px] leading-relaxed" style={{ color: "#2A2F3A" }}>
+                  <p>{m.reply!.intro}</p>
+                  {m.reply!.bullets && (
                     <ul className="mt-3 list-disc space-y-1.5 pl-5 marker:text-[#2A2F3A]">
-                      {m.reply!.notes.map((n) => (<li key={n}>{n}</li>))}
+                      {m.reply!.bullets.map((b) => (<li key={b}>{renderBullet(b)}</li>))}
                     </ul>
-                  </>
-                )}
-                {m.reply!.outro && <p className="mt-4">{m.reply!.outro}</p>}
-                {m.reply!.templates && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {m.reply!.templates.map((t, i) => (
-                      <button
-                        key={t.id}
-                        onClick={() => onStartSetup(t.id)}
-                        className={`inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold transition ${i === 0 ? "text-white hover:opacity-90" : "hover:bg-[#F6F4F0]"}`}
-                        style={i === 0 ? { backgroundColor: INK } : { border: "1px solid #D8D3CB", color: INK }}
-                      >
-                        Set up {t.name.replace("Automate ", "")} <ArrowRight size={15} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  )}
+                  {m.reply!.notes && (
+                    <>
+                      <p className="mt-4">{m.reply!.notesTitle}</p>
+                      <ul className="mt-3 list-disc space-y-1.5 pl-5 marker:text-[#2A2F3A]">
+                        {m.reply!.notes.map((n) => (<li key={n}>{n}</li>))}
+                      </ul>
+                    </>
+                  )}
+                  {m.reply!.outro && <p className="mt-4">{m.reply!.outro}</p>}
+                  {m.reply!.templates && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {m.reply!.templates.map((t, i) => (
+                        <button
+                          key={t.id}
+                          onClick={() => onStartSetup(t.id)}
+                          className={`inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold transition ${i === 0 ? "text-white hover:opacity-90" : "hover:bg-[#F6F4F0]"}`}
+                          style={i === 0 ? { backgroundColor: INK } : { border: "1px solid #D8D3CB", color: INK }}
+                        >
+                          Set up {t.name.replace("Automate ", "")} <ArrowRight size={15} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              <div className="mt-4 flex items-center gap-3" style={{ color: MUTED }}>
-                <button onClick={() => copy(m)} aria-label="Copy reply" className="transition hover:text-[#0B1B36]">
-                  {copied === m.id ? <Check size={15} /> : <Copy size={15} />}
-                </button>
-                <button
-                  onClick={() => setVote((v) => ({ ...v, [m.id]: v[m.id] === "up" ? null : "up" }))}
-                  aria-label="Good reply"
-                  className={`transition hover:text-[#0B1B36] ${vote[m.id] === "up" ? "text-[#0B1B36]" : ""}`}
-                >
-                  <ThumbsUp size={15} />
-                </button>
-                <button
-                  onClick={() => setVote((v) => ({ ...v, [m.id]: v[m.id] === "down" ? null : "down" }))}
-                  aria-label="Bad reply"
-                  className={`transition hover:text-[#0B1B36] ${vote[m.id] === "down" ? "text-[#0B1B36]" : ""}`}
-                >
-                  <ThumbsDown size={15} />
-                </button>
+                <div className="mt-4 flex items-center gap-3" style={{ color: MUTED }}>
+                  <button onClick={() => copy(m)} aria-label="Copy reply" className="transition hover:text-[#0B1B36]">
+                    {copied === m.id ? <Check size={15} /> : <Copy size={15} />}
+                  </button>
+                  <button
+                    onClick={() => setVote((v) => ({ ...v, [m.id]: v[m.id] === "up" ? null : "up" }))}
+                    aria-label="Good reply"
+                    className={`transition hover:text-[#0B1B36] ${vote[m.id] === "up" ? "text-[#0B1B36]" : ""}`}
+                  >
+                    <ThumbsUp size={15} />
+                  </button>
+                  <button
+                    onClick={() => setVote((v) => ({ ...v, [m.id]: v[m.id] === "down" ? null : "down" }))}
+                    aria-label="Bad reply"
+                    className={`transition hover:text-[#0B1B36] ${vote[m.id] === "down" ? "text-[#0B1B36]" : ""}`}
+                  >
+                    <ThumbsDown size={15} />
+                  </button>
+                </div>
               </div>
+            )
+          )}
+
+          {pending && (
+            <div className="flex items-center gap-2 text-[13px]" style={{ color: MUTED }}>
+              <Loader2 size={14} className="animate-spin" /> Working…
             </div>
-          )
-        )}
+          )}
+          <div ref={endRef} />
+        </div>
 
-        {pending && (
-          <div className="flex items-center gap-2 text-[13px]" style={{ color: MUTED }}>
-            <Loader2 size={14} className="animate-spin" /> Working…
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {/* Input */}
-      <div className="sticky bottom-4 mt-8">
-        <div className="rounded-md bg-white" style={{ border: `2px solid ${INK}` }}>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (!pending && input.trim()) { send(input); setInput(""); }
-              }
-            }}
-            rows={3}
-            placeholder="Chat with Solara AI"
-            className="block w-full resize-none bg-transparent px-3.5 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#8B867D]"
-          />
-          <div className="flex justify-end px-3 pb-3">
-            <button
-              onClick={() => { if (!pending && input.trim()) { send(input); setInput(""); } }}
-              disabled={pending || !input.trim()}
-              aria-label="Send"
-              className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#ECE8E1] disabled:text-[#A29D93]"
-              style={{ backgroundColor: INK }}
-            >
-              <ArrowUp size={15} />
-            </button>
+        {/* Input */}
+        <div className="sticky bottom-4 mt-8">
+          <div className="rounded-md bg-white" style={{ border: `2px solid ${INK}` }}>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submitInput();
+                }
+              }}
+              rows={3}
+              placeholder="Chat with Solara AI"
+              className="block w-full resize-none bg-transparent px-3.5 pt-3 text-sm text-slate-800 outline-none placeholder:text-[#8B867D]"
+            />
+            <div className="flex justify-end px-3 pb-3">
+              <button
+                onClick={submitInput}
+                disabled={pending || !input.trim()}
+                aria-label="Send"
+                className="flex h-7 w-7 items-center justify-center rounded text-white transition disabled:cursor-not-allowed disabled:bg-[#ECE8E1] disabled:text-[#A29D93]"
+                style={{ backgroundColor: INK }}
+              >
+                <ArrowUp size={15} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
