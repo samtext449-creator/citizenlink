@@ -14,9 +14,10 @@ import {
   Plus,
   RefreshCw,
   ShieldCheck,
-  Smartphone,
   User,
   X,
+  Briefcase,
+  Check,
 } from "lucide-react";
 
 // --------------------------------------------------
@@ -26,70 +27,61 @@ import {
 type AcctStatus = "connected" | "attention";
 
 type Account = {
+  id: string;
   pin: string;
   name: string;
   type: "Individual" | "Company";
   status: AcctStatus;
   lastVerified: string;
   note?: string;
-  workflow: string | null; // one workflow per KRA PIN
+  obligations: string[];
 };
 
-// Mock data removed
-const initialAccounts: Account[] = [];
+type AvailableKraAccount = {
+  kra_pin: string;
+  taxpayer_name: string;
+  taxpayer_type: "Individual" | "Company";
+  obligations: string[];
+};
 
 const STATUS_META: Record<AcctStatus, { label: string; cls: string }> = {
   connected: { label: "Connected", cls: "bg-emerald-50 text-emerald-700" },
   attention: { label: "Re-authentication needed", cls: "bg-amber-100 text-amber-700" },
 };
 
-const PIN_FORMAT = /^[AP]\d{9}[A-Z]$/;
 const maskPin = (pin: string) => `${pin.slice(0, 3)}•••••••${pin.slice(-1)}`;
 const today = () =>
   new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
 // --------------------------------------------------
-// Verification (demo stubs)
-// --------------------------------------------------
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const demoVerifyPassword = async (pw: string) => {
-  await wait(900);
-  return pw.length > 0;
-};
-const demoSendOtp = async (_pin: string) => {
-  await wait(700);
-  return true;
-};
-const demoVerifyOtp = async (code: string, _pin: string) => {
-  await wait(900);
-  return code === "123456";
-};
-
-type Auth = {
-  verifyPassword: (password: string) => Promise<boolean>;
-  sendOtp: (pin: string) => Promise<boolean>;
-  verifyOtp: (code: string, pin: string) => Promise<boolean>;
-};
-
-const PHONE_HINT = "+254 7•• ••• 123";
-const RESEND_SECONDS = 30;
-const MAX_CODE_ATTEMPTS = 5;
-
-// --------------------------------------------------
 // Page
 // --------------------------------------------------
 
-export default function LinkedAccountsPage({
-  verifyPassword = demoVerifyPassword,
-  sendOtp = demoSendOtp,
-  verifyOtp = demoVerifyOtp,
-}: Partial<Auth>) {
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
-  const [dialog, setDialog] = useState<{ reauthPin?: string } | null>(null);
+export default function LinkedAccountsPage() {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [dialog, setDialog] = useState(false);
   const [unlinkPin, setUnlinkPin] = useState<string | null>(null);
   const [verifyingPin, setVerifyingPin] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch linked accounts on mount
+  useEffect(() => {
+    async function fetchAccounts() {
+      try {
+        const res = await fetch("/api/taxflow/linked-accounts", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setAccounts(data.accounts || []);
+        }
+      } catch (err) {
+        console.error("Failed to load linked accounts:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchAccounts();
+  }, []);
 
   const unlinking = accounts.find((a) => a.pin === unlinkPin) ?? null;
 
@@ -104,30 +96,25 @@ export default function LinkedAccountsPage({
     }, 1200);
   }
 
-  function linked(pin: string, isReauth: boolean) {
-    setAccounts((prev) =>
-      isReauth
-        ? prev.map((a) => (a.pin === pin ? { ...a, status: "connected", lastVerified: today(), note: undefined } : a))
-        : [
-            ...prev,
-            {
-              pin,
-              name: "Name from KRA iTax",
-              type: pin.startsWith("P") ? "Company" : "Individual",
-              status: "connected",
-              lastVerified: today(),
-              workflow: null,
-            },
-          ]
-    );
-    setDialog(null);
-    setNotice(isReauth ? `${maskPin(pin)} was reconnected.` : `${maskPin(pin)} was linked.`);
+  function handleLinkSuccess(newAccount: Account) {
+    setAccounts((prev) => [...prev, newAccount]);
+    setDialog(false);
+    setNotice(`${maskPin(newAccount.pin)} was linked successfully.`);
   }
 
-  function unlink(pin: string) {
-    setAccounts((prev) => prev.filter((a) => a.pin !== pin));
-    setUnlinkPin(null);
-    setNotice(`${maskPin(pin)} was unlinked.`);
+  async function unlink(pin: string) {
+    try {
+      await fetch("/api/taxflow/linked-accounts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kra_pin: pin }),
+      });
+      setAccounts((prev) => prev.filter((a) => a.pin !== pin));
+      setUnlinkPin(null);
+      setNotice(`${maskPin(pin)} was unlinked.`);
+    } catch {
+      setNotice("Failed to unlink account. Please try again.");
+    }
   }
 
   return (
@@ -139,11 +126,11 @@ export default function LinkedAccountsPage({
             Linked Accounts
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Connect your KRA accounts so TaxFlow can file on your behalf.
+            Connect your KRA accounts so Taxflow can file on your behalf.
           </p>
         </div>
         <button
-          onClick={() => setDialog({})}
+          onClick={() => setDialog(true)}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0B1B36] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
           <Plus size={18} />
@@ -172,7 +159,11 @@ export default function LinkedAccountsPage({
       </div>
 
       {/* Accounts */}
-      {accounts.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center p-12">
+          <Loader2 className="animate-spin text-slate-400" size={32} />
+        </div>
+      ) : accounts.length === 0 ? (
         <section className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
           <div className="rounded-2xl bg-blue-50 p-4 text-blue-700">
             <Link2 size={28} />
@@ -182,7 +173,7 @@ export default function LinkedAccountsPage({
             Link a KRA account to start automating your filings.
           </p>
           <button
-            onClick={() => setDialog({})}
+            onClick={() => setDialog(true)}
             className="mt-5 rounded-lg bg-[#0B1B36] px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
           >
             Link KRA account
@@ -231,15 +222,15 @@ export default function LinkedAccountsPage({
                     <dd className="mt-1 font-semibold text-slate-700">{a.lastVerified}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-400">Workflow</dt>
-                    <dd className="mt-1 font-semibold text-slate-700">{a.workflow ?? "None yet"}</dd>
+                    <dt className="text-slate-400">Obligations</dt>
+                    <dd className="mt-1 font-semibold text-slate-700 truncate">{a.obligations.join(", ") || "None"}</dd>
                   </div>
                 </dl>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
                   {a.status === "attention" ? (
                     <button
-                      onClick={() => setDialog({ reauthPin: a.pin })}
+                      onClick={() => { /* Trigger reauth logic if needed */ }}
                       className="rounded-lg bg-[#0B1B36] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
                     >
                       Re-authenticate
@@ -271,35 +262,25 @@ export default function LinkedAccountsPage({
         Sample accounts are not real account data.
       </p>
 
-      {/* Link / re-authenticate dialog */}
+      {/* LINK DIALOG */}
       {dialog && (
-        <LinkDialog
-          reauthPin={dialog.reauthPin}
+        <LinkWizard
+          onClose={() => setDialog(false)}
+          onSuccess={handleLinkSuccess}
           existingPins={accounts.map((a) => a.pin)}
-          auth={{ verifyPassword, sendOtp, verifyOtp }}
-          onClose={() => setDialog(null)}
-          onDone={(pin) => linked(pin, !!dialog.reauthPin)}
         />
       )}
 
       {/* Unlink confirmation */}
       {unlinking && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="unlink-title">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 id="unlink-title" className="text-lg font-bold text-slate-900">
+            <h3 className="text-lg font-bold text-slate-900">
               Unlink {maskPin(unlinking.pin)}?
             </h3>
             <ul className="mt-4 space-y-2 text-sm text-slate-600">
-              {unlinking.workflow ? (
-                <li>
-                  Your <strong className="text-slate-800">{unlinking.workflow}</strong> workflow will pause, and
-                  scheduled filings for this PIN will stop.
-                </li>
-              ) : (
-                <li>No workflow uses this account, so nothing will stop running.</li>
-              )}
+              <li>Your workflows using this PIN will pause.</li>
               <li>Your documents and submission history stay available.</li>
-              <li>You can link this account again at any time.</li>
             </ul>
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
@@ -323,258 +304,264 @@ export default function LinkedAccountsPage({
 }
 
 // --------------------------------------------------
-// Link dialog: PIN + TaxFlow password, then a one-time code
+// Link Wizard (3 Steps)
 // --------------------------------------------------
 
-function LinkDialog({
-  reauthPin,
-  existingPins,
-  auth,
+function LinkWizard({
   onClose,
-  onDone,
+  onSuccess,
+  existingPins,
 }: {
-  reauthPin?: string;
-  existingPins: string[];
-  auth: Auth;
   onClose: () => void;
-  onDone: (pin: string) => void;
+  onSuccess: (account: Account) => void;
+  existingPins: string[];
 }) {
-  const [step, setStep] = useState<"details" | "otp">("details");
-  const [pin, setPin] = useState(reauthPin ?? "");
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  
+  // Step 1: Auth State
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [code, setCode] = useState("");
-  const [codeError, setCodeError] = useState("");
-  const [attempts, setAttempts] = useState(0);
-  const [cooldown, setCooldown] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [cooldown]);
+  // Step 2: PIN Selection State
+  const [availableAccounts, setAvailableAccounts] = useState<AvailableKraAccount[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<AvailableKraAccount | null>(null);
+  const [isLinking, setIsLinking] = useState(false);
+  const [linkError, setLinkError] = useState("");
 
-  const pinUpper = pin.trim().toUpperCase();
-  const formatOk = PIN_FORMAT.test(pinUpper);
-  const taken = !reauthPin && existingPins.includes(pinUpper);
-  const canContinue = formatOk && !taken && password.length > 0 && consent && !busy;
+  // Step 1: Verify Taxflow Identity
+  async function handleVerifyIdentity(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthError("");
+    setIsVerifying(true);
 
-  async function submitDetails() {
-    if (!canContinue) return;
-    setBusy(true);
-    setPasswordError("");
     try {
-      const ok = await auth.verifyPassword(password);
-      if (!ok) {
-        setPassword("");
-        setPasswordError("That password is incorrect. Try again.");
-        setBusy(false);
-        return;
+      const res = await fetch("/api/taxflow/verify-identity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Invalid email or password.");
       }
-      setPassword("");
-      await auth.sendOtp(pinUpper);
-      setCode("");
-      setCodeError("");
-      setAttempts(0);
-      setCooldown(RESEND_SECONDS);
-      setStep("otp");
-    } catch {
-      setPasswordError("Something went wrong. Please try again.");
+
+      // Fetch the available KRA accounts for this verified user
+      const accountsRes = await fetch(`/api/taxflow/available-kra-pins?merchant_id=${data.merchant_id}`);
+      const accountsData = await accountsRes.json();
+
+      if (!accountsRes.ok) {
+        throw new Error("Could not fetch available KRA accounts.");
+      }
+
+      // Filter out ones already linked
+      const newAccounts = (accountsData.accounts || []).filter(
+        (acc: AvailableKraAccount) => !existingPins.includes(acc.kra_pin)
+      );
+
+      if (newAccounts.length === 0) {
+        throw new Error("No new KRA PINs found for this account. You may have already linked them all.");
+      }
+
+      setAvailableAccounts(newAccounts);
+      setStep(2);
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setIsVerifying(false);
     }
-    setBusy(false);
   }
 
-  async function submitCode() {
-    if (code.length !== 6 || busy) return;
-    setBusy(true);
-    setCodeError("");
-    try {
-      const ok = await auth.verifyOtp(code, pinUpper);
-      if (ok) {
-        onDone(pinUpper);
-        return;
-      }
-      const used = attempts + 1;
-      setAttempts(used);
-      setCode("");
-      if (used >= MAX_CODE_ATTEMPTS) {
-        setStep("details");
-        setPasswordError("Too many incorrect codes. Enter your password to get a new one.");
-      } else {
-        setCodeError(`That code is incorrect. ${MAX_CODE_ATTEMPTS - used} attempts left.`);
-      }
-    } catch {
-      setCodeError("Something went wrong. Please try again.");
-    }
-    setBusy(false);
-  }
+  // Step 2: Link Selected PIN
+  async function handleLinkAccount() {
+    if (!selectedAccount) return;
+    setLinkError("");
+    setIsLinking(true);
 
-  async function resend() {
-    if (cooldown > 0 || busy) return;
-    setBusy(true);
-    setCodeError("");
     try {
-      await auth.sendOtp(pinUpper);
-      setCooldown(RESEND_SECONDS);
-    } catch {
-      setCodeError("Could not send a new code. Please try again.");
+      const res = await fetch("/api/taxflow/link-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kra_pin: selectedAccount.kra_pin,
+          taxpayer_name: selectedAccount.taxpayer_name,
+          taxpayer_type: selectedAccount.taxpayer_type,
+          obligations: selectedAccount.obligations,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to link account.");
+      }
+
+      onSuccess({
+        id: data.id || Math.random().toString(),
+        pin: selectedAccount.kra_pin,
+        name: selectedAccount.taxpayer_name,
+        type: selectedAccount.taxpayer_type,
+        status: "connected",
+        lastVerified: today(),
+        obligations: selectedAccount.obligations,
+      });
+      setStep(3);
+    } catch (err: any) {
+      setLinkError(err.message);
+    } finally {
+      setIsLinking(false);
     }
-    setBusy(false);
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="link-title">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <div className="flex items-center justify-between">
-          <h3 id="link-title" className="text-lg font-bold text-slate-900">
-            {step === "otp"
-              ? "Enter verification code"
-              : reauthPin
-              ? "Re-authenticate account"
-              : "Link KRA account"}
-          </h3>
-          <button onClick={onClose} disabled={busy} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl relative">
+        
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+        >
+          <X size={18} />
+        </button>
 
-        {step === "details" ? (
-          <>
-            <p className="mt-2 text-sm text-slate-500">
-              Confirm it's you with your TaxFlow password. We'll then send a code to your phone.
+        {/* STEP 1: Verify Identity */}
+        {step === 1 && (
+          <form onSubmit={handleVerifyIdentity}>
+            <h3 className="text-lg font-bold text-slate-900">Verify your identity</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter your Taxflow email and password to view your available KRA accounts.
             </p>
 
-            <label className="mt-5 block text-sm font-semibold text-slate-800">
-              KRA PIN
-              <input
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                readOnly={!!reauthPin}
-                maxLength={11}
-                placeholder="e.g. A123456789B"
-                className={`mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-normal uppercase outline-none focus:border-[#0B1B36] ${
-                  reauthPin ? "bg-slate-50 text-slate-500" : ""
-                }`}
-              />
-            </label>
-            {pin && !formatOk && !reauthPin && (
-              <p className="mt-2 text-xs text-slate-500">A KRA PIN is a letter, 9 digits and a letter.</p>
-            )}
-            {formatOk && taken && <p className="mt-2 text-xs text-red-600">This KRA PIN is already linked.</p>}
-
-            <label className="mt-4 block text-sm font-semibold text-slate-800">
-              TaxFlow password
-              <div className="relative mt-2">
-                <Lock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm font-semibold text-slate-800">
+                Email
                 <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setPasswordError("");
-                  }}
-                  autoComplete="current-password"
-                  className="w-full rounded-lg border border-slate-200 py-2.5 pl-9 pr-3 text-sm font-normal outline-none focus:border-[#0B1B36]"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#0B1B36]"
                 />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-800">
+                Password
+                <div className="relative mt-1.5">
+                  <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-lg border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#0B1B36]"
+                  />
+                </div>
+              </label>
+            </div>
+
+            {authError && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle size={16} /> {authError}
               </div>
-            </label>
-            {passwordError ? (
-              <p className="mt-2 text-xs text-red-600">{passwordError}</p>
-            ) : (
-              <p className="mt-2 text-xs text-slate-400">This is your TaxFlow password, not your KRA iTax password.</p>
             )}
 
-            <label className="mt-5 flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-              <input type="checkbox" className="mt-1" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span className="flex gap-2">
-                <ShieldCheck size={18} className="mt-0.5 shrink-0 text-slate-500" />
-                I own this KRA PIN or am authorized to act on it, and I authorize TaxFlow to file returns for it, only for workflows I activate.
-              </span>
-            </label>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={onClose}
-                disabled={busy}
-                className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitDetails}
-                disabled={!canContinue}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0B1B36] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy && <Loader2 size={15} className="animate-spin" />}
-                {busy ? "Checking…" : "Continue"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
             <button
-              onClick={() => setStep("details")}
-              disabled={busy}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800"
+              type="submit"
+              disabled={isVerifying || !email || !password}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#0B1B36] py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
             >
-              <ArrowLeft size={14} />
-              Back
+              {isVerifying && <Loader2 size={16} className="animate-spin" />}
+              {isVerifying ? "Verifying…" : "Continue"}
             </button>
+          </form>
+        )}
 
-            <div className="mt-4 flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-              <Smartphone size={18} className="mt-0.5 shrink-0 text-slate-500" />
-              <p>
-                We sent a 6-digit code to <strong className="text-slate-800">{PHONE_HINT}</strong> to
-                confirm {maskPin(pinUpper)}. The code expires in 5 minutes.
-              </p>
-            </div>
+        {/* STEP 2: Select KRA Account */}
+        {step === 2 && (
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Select a KRA account</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              We found these KRA accounts associated with your Taxflow profile. Choose one to link.
+            </p>
 
-            <input
-              value={code}
-              onChange={(e) => {
-                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                setCodeError("");
-              }}
-              onKeyDown={(e) => e.key === "Enter" && submitCode()}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="······"
-              aria-label="Verification code"
-              className="mt-5 w-full rounded-lg border border-slate-200 px-3 py-3 text-center text-xl font-semibold tracking-[0.5em] outline-none focus:border-[#0B1B36]"
-            />
-            {codeError && <p className="mt-2 text-xs text-red-600">{codeError}</p>}
-
-            <div className="mt-3 text-xs text-slate-500">
-              {cooldown > 0 ? (
-                <span>Didn't get it? You can request a new code in {cooldown}s.</span>
-              ) : (
-                <button onClick={resend} disabled={busy} className="font-semibold text-blue-700 hover:underline">
-                  Send a new code
+            <div className="mt-5 space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {availableAccounts.map((acc) => (
+                <button
+                  key={acc.kra_pin}
+                  onClick={() => setSelectedAccount(acc)}
+                  className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${
+                    selectedAccount?.kra_pin === acc.kra_pin
+                      ? "border-[#0B1B36] bg-slate-50 ring-1 ring-[#0B1B36]"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className={`mt-0.5 rounded-full p-1 ${selectedAccount?.kra_pin === acc.kra_pin ? "bg-[#0B1B36] text-white" : "border border-slate-300 text-transparent"}`}>
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">{acc.taxpayer_name}</p>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">{acc.kra_pin}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {acc.obligations.map((ob, i) => (
+                        <span key={i} className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide">
+                          {ob}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </button>
-              )}
+              ))}
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            {linkError && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle size={16} /> {linkError}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-between gap-3">
               <button
-                onClick={onClose}
-                disabled={busy}
+                onClick={() => setStep(1)}
+                disabled={isLinking}
                 className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
-                Cancel
+                Back
               </button>
               <button
-                onClick={submitCode}
-                disabled={code.length !== 6 || busy}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0B1B36] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={handleLinkAccount}
+                disabled={!selectedAccount || isLinking}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0B1B36] py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
               >
-                {busy && <Loader2 size={15} className="animate-spin" />}
-                {busy ? "Verifying…" : reauthPin ? "Verify and reconnect" : "Verify and link"}
+                {isLinking && <Loader2 size={16} className="animate-spin" />}
+                {isLinking ? "Linking…" : "Link Account"}
               </button>
             </div>
-          </>
+          </div>
         )}
+
+        {/* STEP 3: Success */}
+        {step === 3 && (
+          <div className="text-center py-4">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
+              <CheckCircle2 size={32} />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-slate-900">Account Linked Successfully</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              You can now create workflows for this KRA PIN.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-6 w-full rounded-lg bg-[#0B1B36] py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Done
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
