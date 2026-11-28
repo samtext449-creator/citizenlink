@@ -36,12 +36,12 @@ export default function SelfDeclarationPage() {
 
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
-  
+
   // Add merchantId state
   const [merchantId, setMerchantId] = useState<number | null>(null);
 
-  const [fullName, setFullName] = useState(""); 
-  const [dbFullName, setDbFullName] = useState(""); 
+  const [fullName, setFullName] = useState("");
+  const [dbFullName, setDbFullName] = useState("");
   const [idNumber, setIdNumber] = useState("");
   const [email, setEmail] = useState("");
 
@@ -75,10 +75,15 @@ export default function SelfDeclarationPage() {
   const turnstileRef = useRef<any>(null);
   const [pendingKraData, setPendingKraData] = useState<{ kraPin: string; kraTaxpayerName: string } | null>(null);
 
+  // Full page load: the dashboard fetches fresh data, so the banner shows the new status
+  function goToDashboard() {
+    window.location.assign(DASHBOARD_ROUTE);
+  }
+
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
         if (res.status === 401) {
           router.replace(LOGIN_ROUTE);
           return;
@@ -88,13 +93,14 @@ export default function SelfDeclarationPage() {
         if (u) {
           // Store merchant_id for the submit payload
           if (u.merchant_id) setMerchantId(u.merchant_id);
-          
-          if (u.profile_status === "pending_approval" || u.profile_status === "approved") {
-            router.replace(DASHBOARD_ROUTE);
+
+          // Already submitted or approved: this form is not needed
+          if (["pending_approval", "completed", "approved"].includes(u.profile_status)) {
+            window.location.replace(DASHBOARD_ROUTE);
             return;
           }
           if (u.email) setEmail(u.email);
-          
+
           let nameToSet = "";
           if (u.full_name) {
             nameToSet = u.full_name;
@@ -102,7 +108,7 @@ export default function SelfDeclarationPage() {
             nameToSet = `${u.first_name || ''} ${u.last_name || ''}`.trim();
           }
           setFullName(nameToSet);
-          setDbFullName(nameToSet); 
+          setDbFullName(nameToSet);
         }
       } catch {
         /* stay on the page */
@@ -120,9 +126,9 @@ export default function SelfDeclarationPage() {
           const obRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               kraPin: pendingKraData.kraPin,
-              turnstileToken: token 
+              turnstileToken: token
             }),
           });
 
@@ -140,12 +146,12 @@ export default function SelfDeclarationPage() {
             if (name.includes('paye')) return 'paye';
             if (name.includes('rental')) return 'mri';
             if (name.includes('turnover')) return 'turnover_tax';
-            return ob.name; 
+            return ob.name;
           });
 
           setTaxInfo({
             kra_pin: pendingKraData.kraPin,
-            obligation_status: "Active", 
+            obligation_status: "Active",
             holder_full_name: pendingKraData.kraTaxpayerName,
             obligations: mappedObligations,
           });
@@ -177,7 +183,7 @@ export default function SelfDeclarationPage() {
     setVerifyError("");
 
     let tokenToUse = turnstileToken;
-    
+
     if (!tokenToUse) {
       tokenToUse = await new Promise<string | null>((resolve) => {
         let attempts = 0;
@@ -185,7 +191,7 @@ export default function SelfDeclarationPage() {
           if (turnstileToken) {
             clearInterval(interval);
             resolve(turnstileToken);
-          } else if (attempts > 30) { 
+          } else if (attempts > 30) {
             clearInterval(interval);
             resolve(null);
           }
@@ -200,15 +206,15 @@ export default function SelfDeclarationPage() {
       turnstileRef.current?.reset();
       return;
     }
-    
+
     try {
       const pinRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          taxpayerType, 
+        body: JSON.stringify({
+          taxpayerType,
           taxpayerId: idNumber.trim(),
-          turnstileToken: tokenToUse 
+          turnstileToken: tokenToUse
         }),
       });
 
@@ -232,7 +238,7 @@ export default function SelfDeclarationPage() {
       setPendingKraData({ kraPin, kraTaxpayerName });
       setTurnstileToken(null);
       turnstileRef.current?.reset();
-      
+
     } catch (e: any) {
       setVerifyError(e?.message || "Verification failed. Please try again.");
       turnstileRef.current?.reset();
@@ -274,7 +280,9 @@ export default function SelfDeclarationPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          merchant_id: merchantId, // Pass the integer ID here
+          merchant_id: merchantId,
+
+          // snake_case fields
           full_name: fullName,
           id_number: idNumber,
           email,
@@ -290,11 +298,21 @@ export default function SelfDeclarationPage() {
           phone,
           service: serviceId,
           terms_accepted: true,
-          // Include KRA data
           kra_pin: taxInfo?.kra_pin,
           kra_holder_name: taxInfo?.holder_full_name,
           kra_status: taxInfo?.obligation_status,
           obligations: taxInfo?.obligations,
+
+          // camelCase copies, because the backend route reads these names
+          fullName,
+          idNumber,
+          dateOfBirth: dob,
+          phoneNumber: phone,
+          kraPin: taxInfo?.kra_pin,
+          subCounty,
+          buildingName,
+          poBox,
+          postalCode: zipCode,
         }),
       });
       const json = await res.json();
@@ -319,7 +337,7 @@ export default function SelfDeclarationPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
-      
+
       <div className="hidden">
         <Turnstile
           ref={turnstileRef}
@@ -351,7 +369,7 @@ export default function SelfDeclarationPage() {
 
       <main className="mx-auto max-w-6xl px-6 py-10 sm:px-10 lg:px-16">
         <div className="bg-white border border-slate-200 p-6 sm:p-10 shadow-sm">
-          
+
           {done ? (
             <div className="max-w-2xl">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700 mb-6">
@@ -361,7 +379,7 @@ export default function SelfDeclarationPage() {
               <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
                 Your application is now in the approval stage. Taxflow will review it and let you know as soon as it's approved.
               </p>
-              <button onClick={() => router.replace(DASHBOARD_ROUTE)} className="mt-8 inline-flex items-center gap-2 rounded bg-green-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700">
+              <button onClick={goToDashboard} className="mt-8 inline-flex items-center gap-2 rounded bg-green-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700">
                 Go to dashboard <ArrowRight size={16} />
               </button>
             </div>
@@ -369,7 +387,7 @@ export default function SelfDeclarationPage() {
             <div>
               <h2 className="text-xl font-semibold text-slate-900 mb-6">Profile Information</h2>
               <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
-                
+
                 <div>
                   <label htmlFor="full_name" className={labelClass}>
                     Full Name <span className="text-red-500">*</span>
@@ -427,21 +445,21 @@ export default function SelfDeclarationPage() {
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                       <input id="id_number" inputMode="numeric" className={fieldClass} value={idNumber} onChange={(e) => handleIdChange(e.target.value)} placeholder="12345678" disabled={verifying || verified} />
-                      
+
                       {idNumber.length >= 7 && !verified && (
-                        <button 
-                          type="button" 
-                          onClick={handleVerify} 
-                          disabled={verifying} 
+                        <button
+                          type="button"
+                          onClick={handleVerify}
+                          disabled={verifying}
                           className={`shrink-0 rounded px-6 py-2.5 text-sm font-semibold transition ${
-                            verifying 
-                              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" 
+                            verifying
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                               : "bg-[#0a2540] text-white hover:bg-[#112d4e] shadow-sm"
                           }`}
                         >
                           {verifying ? (
                             <>
-                              <Loader2 size={16} className="animate-spin mr-2 inline-block" /> 
+                              <Loader2 size={16} className="animate-spin mr-2 inline-block" />
                               Checking...
                             </>
                           ) : (
@@ -449,14 +467,14 @@ export default function SelfDeclarationPage() {
                           )}
                         </button>
                       )}
-                      
+
                       {verified && (
                         <div className="shrink-0 inline-flex items-center gap-1.5 rounded bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 border border-green-200">
                           <CheckCircle2 size={16} /> Verified
                         </div>
                       )}
                     </div>
-                    
+
                     {verifying && (
                       <p className="text-sm text-blue-600 flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-200">
                          <Loader2 size={14} className="animate-spin" /> Performing identity security check, please wait...
@@ -503,7 +521,7 @@ export default function SelfDeclarationPage() {
                     <Row label="ID Number" value={idNumber} />
                     <Row label="KRA PIN" value={taxInfo?.kra_pin || "—"} />
                     <Row label="PIN Holder" value={taxInfo?.holder_full_name || "—"} />
-                    
+
                     <div className="flex flex-col px-4 py-3 gap-2">
                       <dt className="text-sm font-medium text-slate-600">Active Obligations</dt>
                       <dd className="flex flex-wrap gap-2">
@@ -540,11 +558,11 @@ export default function SelfDeclarationPage() {
                         </option>
                       ))}
                     </select>
-                    
+
                     {notEligible && selectedService && (
                       <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm leading-relaxed text-red-700">
-                        <strong>Ineligible:</strong> Your PIN is not registered for the <strong>{selectedService.obligationName}</strong> obligation. 
-                        You selected <em>{selectedService.name}</em>, which requires it. 
+                        <strong>Ineligible:</strong> Your PIN is not registered for the <strong>{selectedService.obligationName}</strong> obligation.
+                        You selected <em>{selectedService.name}</em>, which requires it.
                         Please pick another service or check your obligations on iTax.
                       </div>
                     )}
