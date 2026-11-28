@@ -6,9 +6,6 @@ export const dynamic = 'force-dynamic';
 
 const BACKEND_URL = process.env.AUTH_ENGINE_URL;
 
-// Reads the `exp` claim from a JWT WITHOUT verifying it.
-// Only used to tell the UI when to show the warning; the backend still
-// verifies the real token on every request.
 function decodeJwtExp(token: string | undefined | null): number | null {
   if (!token) return null;
   try {
@@ -19,7 +16,7 @@ function decodeJwtExp(token: string | undefined | null): number | null {
       'base64'
     ).toString('utf8');
     const exp = JSON.parse(json)?.exp;
-    return typeof exp === 'number' ? exp * 1000 : null; // ms since epoch
+    return typeof exp === 'number' ? exp * 1000 : null;
   } catch {
     return null;
   }
@@ -33,7 +30,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    // We call the Taxflow-specific endpoint we just created
+    // --- CHANGE 1: Point to the new Taxflow endpoint ---
     const backendResponse = await fetch(`${BACKEND_URL}/v1/auth/taxflow/me`, {
       method: 'GET',
       headers: {
@@ -55,7 +52,6 @@ export async function GET(request: NextRequest) {
 
     const data = await backendResponse.json();
 
-    // Tell the frontend when this session ends so it can warn the user
     const expMs = decodeJwtExp(sessionCookie);
     if (expMs && data?.data) {
       data.data.session_expires_at = new Date(expMs).toISOString();

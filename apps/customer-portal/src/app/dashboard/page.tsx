@@ -117,7 +117,9 @@ function DashboardContent() {
   const [runTour, setRunTour] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  const profileStatus = user?.profile_status ?? "incomplete";
+  const rawStatus = user?.profile_status ?? "incomplete";
+  // Map 'completed' to 'pending_approval' so the UI shows the green banner
+  const profileStatus = rawStatus === "completed" ? "pending_approval" : rawStatus;
   const showProfileBanner = !!user && profileStatus !== "approved";
 
   const WARNING_MS = 2 * 60 * 1000; 
@@ -432,28 +434,27 @@ function DashboardContent() {
             }`}
           >
             {profileStatus === "pending_approval" || profileStatus === "pending" ? (
-              <>
-                <CheckCircle2 size={17} className="shrink-0 text-green-700" />
-                <p className="truncate text-[13px] font-semibold text-green-900">
-                  Your application is in the approval stage. Taxflow will
-                  approve it shortly.
-                </p>
-              </>
-            ) : (
-              <>
-                <AlertCircle size={17} className="shrink-0 text-yellow-700" />
-                <p className="truncate text-[13px] font-semibold text-yellow-900">
-                  To start your journey of automation, complete your profile
-                </p>
-                <button
-                  onClick={() => router.push("/self-declaration")}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
-                >
-                  Complete Profile
-                  <ArrowRight size={13} />
-                </button>
-              </>
-            )}
+  <>
+    <CheckCircle2 size={17} className="shrink-0 text-green-700" />
+    <p className="truncate text-[13px] font-semibold text-green-900">
+      Your application is in the approval stage. Taxflow will approve it shortly.
+    </p>
+  </>
+) : (
+  <>
+    <AlertCircle size={17} className="shrink-0 text-yellow-700" />
+    <p className="truncate text-[13px] font-semibold text-yellow-900">
+      To start your journey of automation, complete your profile
+    </p>
+    <button
+      onClick={() => router.push("/self-declaration")}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
+    >
+      Complete Profile
+      <ArrowRight size={13} />
+    </button>
+  </>
+)}
           </div>
         )}
 
