@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   AlertCircle,
@@ -97,6 +97,7 @@ const submissions: any[] = [];
 // --------------------------------------------------
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // Used to detect URL changes to force a refetch
 
   const [activePage, setActivePage] = useState("Overview");
   const [collapsed, setCollapsed] = useState(false);
@@ -112,6 +113,8 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
 
   const profileStatus = user?.profile_status ?? "incomplete";
+  
+  // Show banner if profile is NOT approved
   const showProfileBanner = !!user && profileStatus !== "approved";
 
   // Session expiry warning
@@ -123,13 +126,17 @@ export default function DashboardPage() {
 
   const currentAccount = "Individual Account";
 
-  // 1. Fetch real user data on mount
+  // 1. Fetch real user data on mount & when URL changes
   useEffect(() => {
     let isMounted = true;
 
     const fetchUser = async () => {
+      // Set loading state if we are refetching
+      if (isMounted) setIsLoading(true); 
+      
       try {
-        const res = await fetch("/api/auth/me");
+        // Force network fetch by passing cache: 'no-store'
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
 
         if (res.status === 401) {
           router.replace("/login");
@@ -156,16 +163,14 @@ export default function DashboardPage() {
     return () => {
       isMounted = false; 
     };
-  }, [router]);
+  }, [router, searchParams]); // Re-run fetch if URL changes
 
   // 2. Separate Effect to trigger the tour safely
   useEffect(() => {
-    // Only trigger when loading is finished and we are on Overview
     if (!isLoading && activePage === "Overview") {
       const hasSeenTour = localStorage.getItem("taxflow_tour_completed");
       
       if (!hasSeenTour) {
-        // Give the DOM 1.5 seconds to render all the data-tour elements
         const timer = setTimeout(() => {
           setRunTour(true);
         }, 1500);
@@ -422,15 +427,16 @@ export default function DashboardPage() {
             role="alert"
             data-tour="profile-banner"
             className={`flex h-9 items-center justify-center gap-3 border-b px-4 ${
-              profileStatus === "pending_approval"
-                ? "border-blue-200 bg-blue-50"
+              // CHANGED TO GREEN FOR PENDING APPROVAL
+              profileStatus === "pending_approval" || profileStatus === "pending"
+                ? "border-green-200 bg-green-50" 
                 : "border-yellow-300 bg-yellow-100"
             }`}
           >
-            {profileStatus === "pending_approval" ? (
+            {profileStatus === "pending_approval" || profileStatus === "pending" ? (
               <>
-                <Clock3 size={17} className="shrink-0 text-blue-700" />
-                <p className="truncate text-[13px] font-semibold text-blue-900">
+                <CheckCircle2 size={17} className="shrink-0 text-green-700" />
+                <p className="truncate text-[13px] font-semibold text-green-900">
                   Your application is in the approval stage. Taxflow will
                   approve it shortly.
                 </p>
