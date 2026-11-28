@@ -3,16 +3,22 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 
-// Initialize Supabase Admin client (Bypasses RLS for server-side inserts)
-// Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are in your .env.local
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(req: Request) {
   try {
-    // 1. AUTHENTICATION: Get the user's session from cookies
+    // 1. INITIALIZE SUPABASE INSIDE THE REQUEST USING ANON KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json(
+        { success: false, message: "Server configuration error: Missing Supabase credentials" },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // 2. AUTHENTICATION: Get the user's session from cookies
     const cookieStore = cookies();
     const sessionToken = cookieStore.get('xeco_session')?.value;
 
@@ -20,8 +26,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: "Unauthorized: No session token" }, { status: 401 });
     }
 
-    // 2. VERIFY JWT
-    // CRITICAL: This JWT_SECRET MUST match the JWT_SECRET in your Express backend
+    // 3. VERIFY JWT
     let merchantId: number;
     try {
       const decoded = jwt.verify(sessionToken, process.env.JWT_SECRET!) as { merchantId: number };
@@ -35,7 +40,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: "Invalid session: Missing merchant ID" }, { status: 401 });
     }
 
-    // 3. GET PAYLOAD
+    // 4. GET PAYLOAD
     const body = await req.json();
     const {
       full_name, id_number, email, date_of_birth, phone,
@@ -45,9 +50,9 @@ export async function POST(req: Request) {
       kra_pin, kra_holder_name, kra_status, obligations
     } = body;
 
-    // 4. INSERT USER PROFILE
-    const { error: profileErr } = await supabaseAdmin.from('user_profiles').upsert({
-      user_id: merchantId, // INTEGER ID from JWT
+    // 5. INSERT USER PROFILE
+    const { error: profileErr } = await supabase.from('user_profiles').upsert({
+      user_id: merchantId,
       full_name,
       id_number,
       date_of_birth: date_of_birth || null,
@@ -58,8 +63,8 @@ export async function POST(req: Request) {
 
     if (profileErr) throw new Error(`Profile Error: ${profileErr.message}`);
 
-    // 5. INSERT ADDRESS
-    const { error: addressErr } = await supabaseAdmin.from('user_addresses').upsert({
+    // 6. INSERT ADDRESS
+    const { error: addressErr } = await supabase.from('user_addresses').upsert({
       user_id: merchantId,
       county,
       sub_county,
@@ -70,16 +75,16 @@ export async function POST(req: Request) {
 
     if (addressErr) throw new Error(`Address Error: ${addressErr.message}`);
 
-    // 6. INSERT PREFERENCES
-    const { error: prefErr } = await supabaseAdmin.from('user_preferences').upsert({
+    // 7. INSERT PREFERENCES
+    const { error: prefErr } = await supabase.from('user_preferences').upsert({
       user_id: merchantId,
       notification_channel
     }, { onConflict: 'user_id' });
 
     if (prefErr) throw new Error(`Preferences Error: ${prefErr.message}`);
 
-    // 7. INSERT TAXPAYER PROFILE (KRA Data)
-    const { data: taxProfile, error: taxErr } = await supabaseAdmin.from('taxpayer_profiles').upsert({
+    // 8. INSERT TAXPAYER PROFILE (KRA Data)
+    const { data: taxProfile, error: taxErr } = await supabase.from('taxpayer_profiles').upsert({
       user_id: merchantId,
       kra_pin: kra_pin,
       taxpayer_type,
@@ -91,10 +96,9 @@ export async function POST(req: Request) {
 
     if (taxErr) throw new Error(`Tax Profile Error: ${taxErr.message}`);
 
-    // 8. INSERT OBLIGATIONS
+    // 9. INSERT OBLIGATIONS
     if (obligations && obligations.length > 0 && taxProfile) {
-      // Clear old ones first
-      await supabaseAdmin.from('taxpayer_obligations').delete().eq('taxpayer_profile_id', taxProfile.id);
+      await supabase.from('taxpayer_obligations').delete().eq('taxpayer_profile_id', taxProfile.id);
       
       const obligationsToInsert = obligations.map((ob: string) => ({
         taxpayer_profile_id: taxProfile.id,
@@ -103,13 +107,13 @@ export async function POST(req: Request) {
         obligation_status: 'Active'
       }));
       
-      const { error: obErr } = await supabaseAdmin.from('taxpayer_obligations').insert(obligationsToInsert);
+      const { error: obErr } = await supabase.from('taxpayer_obligations').insert(obligationsToInsert);
       if (obErr) throw new Error(`Obligations Error: ${obErr.message}`);
     }
 
-    // 9. RECORD CONSENT
+    // 10. RECORD CONSENT
     if (terms_accepted) {
-      const { error: consentErr } = await supabaseAdmin.from('user_consents').insert({
+      const { error: consentErr } = await supabase.from('user_consents').insert({
         user_id: merchantId,
         consent_type: 'TERMS_AND_PRIVACY',
         policy_version: 'v1.0',
@@ -118,9 +122,9 @@ export async function POST(req: Request) {
       if (consentErr) throw new Error(`Consent Error: ${consentErr.message}`);
     }
 
-    // 10. RECORD AUTHORIZATION FOR SELECTED SERVICE
+    // 11. RECORD AUTHORIZATION FOR SELECTED SERVICE
     if (service && taxProfile) {
-      const { error: authErr } = await supabaseAdmin.from('taxpayer_authorizations').insert({
+      const { error: authErr } = await supabase.from('taxpayer_authorizations').insert({
         taxpayer_profile_id: taxProfile.id,
         service_code: service,
         authorization_status: 'granted',
@@ -129,18 +133,15 @@ export async function POST(req: Request) {
       if (authErr) throw new Error(`Authorization Error: ${authErr.message}`);
     }
 
-    // 11. LOG ACTIVITY
-    const { error: logErr } = await supabaseAdmin.from('profile_activity_logs').insert({
+    // 12. LOG ACTIVITY
+    const { error: logErr } = await supabase.from('profile_activity_logs').insert({
       user_id: merchantId,
       event_type: 'PROFILE_COMPLETED',
       description: `User completed profile setup and selected service: ${service}`,
       actor_type: 'user'
     });
     
-    if (logErr) {
-      // We don't throw here because the main data is saved, but we log the error
-      console.error('Activity Log Error:', logErr.message);
-    }
+    if (logErr) console.error('Activity Log Error:', logErr.message);
 
     return NextResponse.json({ success: true, message: 'Profile saved successfully' });
 
