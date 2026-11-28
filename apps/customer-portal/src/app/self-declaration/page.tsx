@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Loader2, X, CheckCircle2, Circle, AlertCircle } from "lucide-react";
+import { Turnstile } from '@marsidev/react-turnstile';
 
 // Change these if your routes are named differently
 const DASHBOARD_ROUTE = "/dashboard";
@@ -26,7 +27,6 @@ const SERVICES = [
   { id: "turnover_tax", name: "Turnover tax return", obligation: "turnover_tax", obligationName: "Turnover Tax" },
 ];
 
-// Updated to match the clean, bordered look from the reference image
 const fieldClass =
   "w-full rounded border border-slate-300 bg-white px-3 py-2.5 text-[15px] text-slate-900 placeholder-slate-400 outline-none transition focus:border-green-500 focus:ring-1 focus:ring-green-500 disabled:bg-slate-50 disabled:text-slate-500";
 const labelClass = "block text-sm font-medium text-slate-700 mb-1.5";
@@ -37,11 +37,10 @@ export default function SelfDeclarationPage() {
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
-  const [fullName, setFullName] = useState(""); // Populated from DB on load
+  const [fullName, setFullName] = useState(""); // Populated from DB
   const [idNumber, setIdNumber] = useState("");
   const [email, setEmail] = useState("");
 
-  // New Fields
   const [dob, setDob] = useState("");
   const [taxpayerType, setTaxpayerType] = useState("KE");
   const [notificationChannel, setNotificationChannel] = useState("email");
@@ -67,6 +66,10 @@ export default function SelfDeclarationPage() {
   const [submitError, setSubmitError] = useState("");
   const [done, setDone] = useState(false);
 
+  // ── Turnstile (Invisible) State ──
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<any>(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -83,7 +86,7 @@ export default function SelfDeclarationPage() {
             return;
           }
           if (u.email) setEmail(u.email);
-          if (u.full_name) setFullName(u.full_name); // Setting the DB full name here
+          if (u.full_name) setFullName(u.full_name); // Pulling DB Name
         }
       } catch {
         /* stay on the page */
@@ -101,6 +104,11 @@ export default function SelfDeclarationPage() {
   }
 
   async function handleVerify() {
+    if (!turnstileToken) {
+      setVerifyError("Security check is initializing. Please wait a moment and try again.");
+      return;
+    }
+
     setVerifying(true);
     setVerifyError("");
     
@@ -112,7 +120,7 @@ export default function SelfDeclarationPage() {
         body: JSON.stringify({ 
           taxpayerType, 
           taxpayerId: idNumber.trim(),
-          turnstileToken: "bypass" // Assuming backend still expects this key
+          turnstileToken: turnstileToken // Real token passed to backend
         }),
       });
 
@@ -125,23 +133,22 @@ export default function SelfDeclarationPage() {
       const kraPin = pinData.data.kraPin;
       const kraTaxpayerName = pinData.data.taxpayerName;
 
-      // 2. Compare against DB name (fullName state populated from /api/auth/me)
+      // 2. Compare against DB name (fullName state)
       const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
       const normalizedKraName = normalize(kraTaxpayerName);
       const normalizedDbName = normalize(fullName);
 
-      // Substring check to allow for middle names being added/removed slightly
       if (!normalizedKraName.includes(normalizedDbName) && !normalizedDbName.includes(normalizedKraName)) {
         throw new Error(`The name on your KRA record (${kraTaxpayerName}) does not match the name on your account (${fullName}). Please contact support.`);
       }
 
-      // 3. Fetch Obligations in the background
+      // 3. Fetch Obligations
       const obRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           kraPin: kraPin,
-          turnstileToken: "bypass"
+          turnstileToken: turnstileToken
         }),
       });
 
@@ -151,7 +158,7 @@ export default function SelfDeclarationPage() {
         throw new Error(obData?.error?.message || "Could not fetch obligations for this PIN.");
       }
 
-      // 4. Map the obligations to our internal service keys
+      // 4. Map obligations
       const rawObligations = obData.data.obligations || [];
       const mappedObligations = rawObligations.map((ob: any) => {
         const name = (ob.name || '').toLowerCase();
@@ -163,7 +170,7 @@ export default function SelfDeclarationPage() {
         return ob.name;
       });
 
-      // 5. Success - Update State
+      // 5. Success
       setTaxInfo({
         kra_pin: kraPin,
         obligation_status: "Active", 
@@ -174,6 +181,10 @@ export default function SelfDeclarationPage() {
       setVerified(true);
     } catch (e: any) {
       setVerifyError(e?.message || "Verification failed. Please try again.");
+      
+      // Reset Turnstile so they can try again with a fresh token
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setVerifying(false);
     }
@@ -246,6 +257,23 @@ export default function SelfDeclarationPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
+      
+      {/* 🚨 INVISIBLE TURNSTILE WIDGET 🚨 
+          This runs in the background. It does not show up in the UI.
+          It generates a valid token for the backend so it doesn't reject the request. */}
+      <div className="hidden">
+        <Turnstile
+          ref={turnstileRef}
+          siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+          onSuccess={(token) => setTurnstileToken(token)}
+          onExpire={() => setTurnstileToken(null)}
+          options={{ 
+            theme: 'light',
+            size: 'invisible' // 👈 This hides the checkbox
+          }}
+        />
+      </div>
+
       {/* Top Header Area */}
       <div className="bg-white border-b border-slate-200 px-6 py-5 sm:px-10 lg:px-16">
         <div className="mx-auto max-w-6xl">
@@ -307,7 +335,7 @@ export default function SelfDeclarationPage() {
 
               <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
                 
-                {/* Full Name (Disabled input, sourced from DB) */}
+                {/* Full Name (Locked from DB) */}
                 <div>
                   <label htmlFor="full_name" className={labelClass}>
                     Full Name <span className="text-red-500">*</span>
