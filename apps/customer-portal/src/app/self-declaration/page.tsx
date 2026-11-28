@@ -66,7 +66,7 @@ export default function SelfDeclarationPage() {
   const [submitError, setSubmitError] = useState("");
   const [done, setDone] = useState(false);
 
-  // ── Turnstile (Invisible) State ──
+  // Turnstile State
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<any>(null);
 
@@ -86,7 +86,7 @@ export default function SelfDeclarationPage() {
             return;
           }
           if (u.email) setEmail(u.email);
-          if (u.full_name) setFullName(u.full_name); // Pulling DB Name
+          if (u.full_name) setFullName(u.full_name);
         }
       } catch {
         /* stay on the page */
@@ -113,14 +113,14 @@ export default function SelfDeclarationPage() {
     setVerifyError("");
     
     try {
-      // 1. Fetch KRA PIN and Taxpayer Name using ID
+      // 1. Fetch KRA PIN
       const pinRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           taxpayerType, 
           taxpayerId: idNumber.trim(),
-          turnstileToken: turnstileToken // Real token passed to backend
+          turnstileToken: turnstileToken 
         }),
       });
 
@@ -133,7 +133,7 @@ export default function SelfDeclarationPage() {
       const kraPin = pinData.data.kraPin;
       const kraTaxpayerName = pinData.data.taxpayerName;
 
-      // 2. Compare against DB name (fullName state)
+      // 2. Compare against DB name (fullName)
       const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
       const normalizedKraName = normalize(kraTaxpayerName);
       const normalizedDbName = normalize(fullName);
@@ -181,8 +181,6 @@ export default function SelfDeclarationPage() {
       setVerified(true);
     } catch (e: any) {
       setVerifyError(e?.message || "Verification failed. Please try again.");
-      
-      // Reset Turnstile so they can try again with a fresh token
       turnstileRef.current?.reset();
       setTurnstileToken(null);
     } finally {
@@ -190,6 +188,7 @@ export default function SelfDeclarationPage() {
     }
   }
 
+  // ── Derived State ──
   const step1Ready =
     verified &&
     fullName.trim() !== "" &&
@@ -210,6 +209,7 @@ export default function SelfDeclarationPage() {
     !!selectedService && !!taxInfo?.obligations.includes(selectedService.obligation);
   const notEligible = !!selectedService && !eligible;
 
+  // ── Submit Handler ──
   async function handleSubmit() {
     setSubmitting(true);
     setSubmitError("");
@@ -258,9 +258,7 @@ export default function SelfDeclarationPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
       
-      {/* 🚨 INVISIBLE TURNSTILE WIDGET 🚨 
-          This runs in the background. It does not show up in the UI.
-          It generates a valid token for the backend so it doesn't reject the request. */}
+      {/* INVISIBLE TURNSTILE WIDGET */}
       <div className="hidden">
         <Turnstile
           ref={turnstileRef}
@@ -269,7 +267,7 @@ export default function SelfDeclarationPage() {
           onExpire={() => setTurnstileToken(null)}
           options={{ 
             theme: 'light',
-            size: 'invisible' // 👈 This hides the checkbox
+            size: 'invisible' 
           }}
         />
       </div>
@@ -335,7 +333,7 @@ export default function SelfDeclarationPage() {
 
               <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
                 
-                {/* Full Name (Locked from DB) */}
+                {/* Full Name */}
                 <div>
                   <label htmlFor="full_name" className={labelClass}>
                     Full Name <span className="text-red-500">*</span>
@@ -345,7 +343,7 @@ export default function SelfDeclarationPage() {
                     className={`${fieldClass} bg-slate-50 cursor-not-allowed`}
                     value={fullName}
                     readOnly
-                    title="This name is linked to your account and cannot be changed."
+                    title="This name is linked to your account."
                   />
                   <p className="mt-1 text-[11px] text-slate-500">From your account profile.</p>
                 </div>
