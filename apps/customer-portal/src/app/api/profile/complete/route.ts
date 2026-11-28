@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 
 // Initialize Supabase Admin client (Bypasses RLS for server-side inserts)
+// Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are in your .env.local
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -16,19 +17,25 @@ export async function POST(req: Request) {
     const sessionToken = cookieStore.get('xeco_session')?.value;
 
     if (!sessionToken) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ success: false, message: "Unauthorized: No session token" }, { status: 401 });
     }
 
-    // Verify the JWT to get the merchant_id
-    // Note: Ensure JWT_SECRET matches your Express backend
-    const decoded = jwt.verify(sessionToken, process.env.JWT_SECRET!) as { merchantId: number };
-    const merchantId = decoded.merchantId;
+    // 2. VERIFY JWT
+    // CRITICAL: This JWT_SECRET MUST match the JWT_SECRET in your Express backend
+    let merchantId: number;
+    try {
+      const decoded = jwt.verify(sessionToken, process.env.JWT_SECRET!) as { merchantId: number };
+      merchantId = decoded.merchantId;
+    } catch (err: any) {
+      console.error("JWT Verification Failed:", err.message);
+      return NextResponse.json({ success: false, message: "Invalid or expired session" }, { status: 401 });
+    }
 
     if (!merchantId) {
-      return NextResponse.json({ success: false, message: "Invalid session" }, { status: 401 });
+      return NextResponse.json({ success: false, message: "Invalid session: Missing merchant ID" }, { status: 401 });
     }
 
-    // 2. GET PAYLOAD
+    // 3. GET PAYLOAD
     const body = await req.json();
     const {
       full_name, id_number, email, date_of_birth, phone,
@@ -38,7 +45,7 @@ export async function POST(req: Request) {
       kra_pin, kra_holder_name, kra_status, obligations
     } = body;
 
-    // 3. INSERT USER PROFILE
+    // 4. INSERT USER PROFILE
     const { error: profileErr } = await supabaseAdmin.from('user_profiles').upsert({
       user_id: merchantId, // INTEGER ID from JWT
       full_name,
@@ -51,8 +58,8 @@ export async function POST(req: Request) {
 
     if (profileErr) throw new Error(`Profile Error: ${profileErr.message}`);
 
-    // 4. INSERT ADDRESS
-    await supabaseAdmin.from('user_addresses').upsert({
+    // 5. INSERT ADDRESS
+    const { error: addressErr } = await supabaseAdmin.from('user_addresses').upsert({
       user_id: merchantId,
       county,
       sub_county,
@@ -61,13 +68,17 @@ export async function POST(req: Request) {
       postal_code: zip_code
     }, { onConflict: 'user_id' });
 
-    // 5. INSERT PREFERENCES
-    await supabaseAdmin.from('user_preferences').upsert({
+    if (addressErr) throw new Error(`Address Error: ${addressErr.message}`);
+
+    // 6. INSERT PREFERENCES
+    const { error: prefErr } = await supabaseAdmin.from('user_preferences').upsert({
       user_id: merchantId,
       notification_channel
     }, { onConflict: 'user_id' });
 
-    // 6. INSERT TAXPAYER PROFILE (KRA Data)
+    if (prefErr) throw new Error(`Preferences Error: ${prefErr.message}`);
+
+    // 7. INSERT TAXPAYER PROFILE (KRA Data)
     const { data: taxProfile, error: taxErr } = await supabaseAdmin.from('taxpayer_profiles').upsert({
       user_id: merchantId,
       kra_pin: kra_pin,
@@ -80,8 +91,8 @@ export async function POST(req: Request) {
 
     if (taxErr) throw new Error(`Tax Profile Error: ${taxErr.message}`);
 
-    // 7. INSERT OBLIGATIONS
-    if (obligations && obligations.length > 0) {
+    // 8. INSERT OBLIGATIONS
+    if (obligations && obligations.length > 0 && taxProfile) {
       // Clear old ones first
       await supabaseAdmin.from('taxpayer_obligations').delete().eq('taxpayer_profile_id', taxProfile.id);
       
@@ -92,36 +103,44 @@ export async function POST(req: Request) {
         obligation_status: 'Active'
       }));
       
-      await supabaseAdmin.from('taxpayer_obligations').insert(obligationsToInsert);
+      const { error: obErr } = await supabaseAdmin.from('taxpayer_obligations').insert(obligationsToInsert);
+      if (obErr) throw new Error(`Obligations Error: ${obErr.message}`);
     }
 
-    // 8. RECORD CONSENT
+    // 9. RECORD CONSENT
     if (terms_accepted) {
-      await supabaseAdmin.from('user_consents').insert({
+      const { error: consentErr } = await supabaseAdmin.from('user_consents').insert({
         user_id: merchantId,
         consent_type: 'TERMS_AND_PRIVACY',
         policy_version: 'v1.0',
         is_accepted: true
       });
+      if (consentErr) throw new Error(`Consent Error: ${consentErr.message}`);
     }
 
-    // 9. RECORD AUTHORIZATION FOR SELECTED SERVICE
-    if (service) {
-      await supabaseAdmin.from('taxpayer_authorizations').insert({
+    // 10. RECORD AUTHORIZATION FOR SELECTED SERVICE
+    if (service && taxProfile) {
+      const { error: authErr } = await supabaseAdmin.from('taxpayer_authorizations').insert({
         taxpayer_profile_id: taxProfile.id,
         service_code: service,
         authorization_status: 'granted',
         authorization_method: 'digital_signature'
       });
+      if (authErr) throw new Error(`Authorization Error: ${authErr.message}`);
     }
 
-    // 10. LOG ACTIVITY
-    await supabaseAdmin.from('profile_activity_logs').insert({
+    // 11. LOG ACTIVITY
+    const { error: logErr } = await supabaseAdmin.from('profile_activity_logs').insert({
       user_id: merchantId,
       event_type: 'PROFILE_COMPLETED',
       description: `User completed profile setup and selected service: ${service}`,
       actor_type: 'user'
     });
+    
+    if (logErr) {
+      // We don't throw here because the main data is saved, but we log the error
+      console.error('Activity Log Error:', logErr.message);
+    }
 
     return NextResponse.json({ success: true, message: 'Profile saved successfully' });
 
