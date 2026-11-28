@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Loader2, X, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, X, CheckCircle2, Circle, AlertCircle, ShieldCheck, FileText, ChevronDown } from "lucide-react";
+import { Turnstile } from '@marsidev/react-turnstile'
 
 // Change these if your routes are named differently
 const DASHBOARD_ROUTE = "/dashboard";
 const LOGIN_ROUTE = "/login";
+
+const XECOFLOW_PAY_BASE = process.env.NEXT_PUBLIC_XECOFLOW_PAY_URL || 'https://xecoflow-pay.onrender.com'
 
 type TaxInfo = {
   kra_pin: string;
@@ -23,15 +26,6 @@ const SERVICES = [
   { id: "mri_return", name: "Monthly rental income return", obligation: "mri", obligationName: "Rental Income" },
   { id: "turnover_tax", name: "Turnover tax return", obligation: "turnover_tax", obligationName: "Turnover Tax" },
 ];
-
-const TEST_ID = "12345678";
-const TEST_RESULT = {
-  full_name: "SAMUEL CHAGA",
-  kra_pin: "A012345678Z",
-  obligation_status: "Active" as const,
-  holder_full_name: "SAMUEL CHAGA",
-  obligations: ["income_tax"],
-};
 
 // Updated to match the clean, bordered look from the reference image
 const fieldClass =
@@ -50,7 +44,7 @@ export default function SelfDeclarationPage() {
 
   // New Fields
   const [dob, setDob] = useState("");
-  const [taxpayerType, setTaxpayerType] = useState("individual");
+  const [taxpayerType, setTaxpayerType] = useState("KE");
   const [notificationChannel, setNotificationChannel] = useState("email");
   const [emergencyContact, setEmergencyContact] = useState("");
 
@@ -73,6 +67,10 @@ export default function SelfDeclarationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [done, setDone] = useState(false);
+
+  // ── Turnstile & API State ──
+  const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
+  const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -105,36 +103,81 @@ export default function SelfDeclarationPage() {
     setVerified(false);
     setTaxInfo(null);
     setVerifyError("");
+    setPinTurnstileToken(null);
+    setObligationsTurnstileToken(null);
   }
 
   async function handleVerify() {
+    if (!pinTurnstileToken) {
+      setVerifyError("Please complete the security check.");
+      return;
+    }
+
     setVerifying(true);
     setVerifyError("");
+    
     try {
-      let d: any;
-      if (idNumber === TEST_ID) {
-        await new Promise((r) => setTimeout(r, 700));
-        d = TEST_RESULT;
-      } else {
-        const res = await fetch("/api/kra/verify-id", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id_number: idNumber }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json.success || !json.data) {
-          throw new Error(json?.message || "We couldn't verify that ID number.");
-        }
-        d = json.data;
+      // 1. Fetch KRA PIN (Find My KRA PIN logic)
+      const pinRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          taxpayerType, 
+          taxpayerId: idNumber.trim(),
+          turnstileToken: pinTurnstileToken
+        }),
+      });
+
+      const pinData = await pinRes.json().catch(() => ({}));
+
+      if (!pinRes.ok || !pinData.success) {
+        // Fallback: If the API doesn't provide a specific message, use generic
+        throw new Error(pinData?.error?.message || "We couldn't verify that ID number. Please check and try again.");
       }
 
-      setTaxInfo({
-        kra_pin: d.kra_pin,
-        obligation_status: d.obligation_status,
-        holder_full_name: d.holder_full_name || d.full_name,
-        obligations: d.obligations || [],
+      const kraPin = pinData.data.kraPin;
+      const taxpayerName = pinData.data.taxpayerName;
+
+      // 2. Fetch Obligations (Check My Obligations logic)
+      if (!obligationsTurnstileToken) {
+        throw new Error("Security check expired. Please try again.");
+      }
+
+      const obRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          kraPin: kraPin,
+          turnstileToken: obligationsTurnstileToken
+        }),
       });
-      if (d.full_name && !fullName.trim()) setFullName(d.full_name);
+
+      const obData = await obRes.json().catch(() => ({}));
+
+      if (!obRes.ok || !obData.success) {
+        throw new Error(obData?.error?.message || "Could not fetch obligations for this PIN.");
+      }
+
+      // 3. Map the obligations to our internal service keys
+      const rawObligations = obData.data.obligations || [];
+      const mappedObligations = rawObligations.map((ob: any) => {
+        const name = (ob.name || '').toLowerCase();
+        if (name.includes('income tax')) return 'income_tax';
+        if (name.includes('vat')) return 'vat';
+        if (name.includes('paye')) return 'paye';
+        if (name.includes('rental')) return 'mri';
+        if (name.includes('turnover')) return 'turnover_tax';
+        return ob.name; // Fallback
+      });
+
+      setTaxInfo({
+        kra_pin: kraPin,
+        obligation_status: "Active", // Assuming Active if obligations are fetched
+        holder_full_name: taxpayerName,
+        obligations: mappedObligations,
+      });
+
+      if (taxpayerName && !fullName.trim()) setFullName(taxpayerName);
       setVerified(true);
     } catch (e: any) {
       setVerifyError(e?.message || "Verification failed. Please try again.");
@@ -344,9 +387,10 @@ export default function SelfDeclarationPage() {
                     value={taxpayerType}
                     onChange={(e) => setTaxpayerType(e.target.value)}
                   >
-                    <option value="individual">Individual</option>
-                    <option value="sole_proprietor">Sole Proprietor</option>
-                    <option value="company">Company</option>
+                    <option value="KE">Kenyan Citizen</option>
+                    <option value="NKE">Kenyan Resident</option>
+                    <option value="NKENR">Non-Resident</option>
+                    <option value="COMP">Company</option>
                   </select>
                 </div>
 
@@ -366,7 +410,7 @@ export default function SelfDeclarationPage() {
                   </select>
                 </div>
 
-                {/* Emergency Contact (NEW) */}
+                {/* Emergency Contact */}
                 <div>
                   <label htmlFor="emergency_contact" className={labelClass}>
                     Emergency Contact <span className="text-red-500">*</span>
@@ -382,48 +426,76 @@ export default function SelfDeclarationPage() {
                   />
                 </div>
 
-                {/* ID Number */}
-                <div>
+                {/* ID Number & Verification */}
+                <div className="md:col-span-2">
                   <label htmlFor="id_number" className={labelClass}>
                     ID Number <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="id_number"
-                      inputMode="numeric"
-                      className={fieldClass}
-                      value={idNumber}
-                      onChange={(e) => handleIdChange(e.target.value)}
-                      placeholder="12345678"
-                    />
-                    {idNumber.length >= 7 && (
-                      <button
-                        type="button"
-                        onClick={handleVerify}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="id_number"
+                        inputMode="numeric"
+                        className={fieldClass}
+                        value={idNumber}
+                        onChange={(e) => handleIdChange(e.target.value)}
+                        placeholder="12345678"
                         disabled={verifying || verified}
-                        className={`shrink-0 rounded px-3 py-2.5 text-sm font-semibold transition ${
-                          verified
-                            ? "bg-green-50 text-green-700 border border-green-200"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 disabled:opacity-60"
-                        }`}
-                      >
-                        {verifying ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : verified ? (
-                          <Check size={16} />
-                        ) : (
-                          "Verify"
-                        )}
-                      </button>
+                      />
+                      {idNumber.length >= 7 && !verified && (
+                        <button
+                          type="button"
+                          onClick={handleVerify}
+                          disabled={verifying || !pinTurnstileToken || !obligationsTurnstileToken}
+                          className={`shrink-0 rounded px-4 py-2.5 text-sm font-semibold transition ${
+                            verifying || !pinTurnstileToken || !obligationsTurnstileToken
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                              : "bg-[#0a2540] text-white hover:bg-[#112d4e] shadow-sm"
+                          }`}
+                        >
+                          {verifying ? <Loader2 size={16} className="animate-spin" /> : "Verify"}
+                        </button>
+                      )}
+                      {verified && (
+                        <div className="shrink-0 inline-flex items-center gap-1.5 rounded bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 border border-green-200">
+                          <CheckCircle2 size={16} /> Verified
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Turnstile Widgets for Verification (Hidden if already verified) */}
+                    {!verified && idNumber.length >= 7 && (
+                      <div className="mt-2 space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <p className="text-xs font-semibold text-slate-600 mb-2">Security Check required for verification:</p>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                           <div>
+                              <span className="text-[10px] text-slate-500 block mb-1">PIN Lookup Check</span>
+                              <Turnstile
+                                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                                onSuccess={(token) => setPinTurnstileToken(token)}
+                                onExpire={() => setPinTurnstileToken(null)}
+                                options={{ theme: 'light' }}
+                              />
+                           </div>
+                           <div>
+                              <span className="text-[10px] text-slate-500 block mb-1">Obligations Check</span>
+                              <Turnstile
+                                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                                onSuccess={(token) => setObligationsTurnstileToken(token)}
+                                onExpire={() => setObligationsTurnstileToken(null)}
+                                options={{ theme: 'light' }}
+                              />
+                           </div>
+                        </div>
+                      </div>
                     )}
+
+                    {verifyError ? (
+                      <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12}/> {verifyError}</p>
+                    ) : !verified && idNumber.length < 7 ? (
+                      <p className="text-xs text-slate-500">Enter your ID number to verify.</p>
+                    ) : null}
                   </div>
-                  {verifyError ? (
-                    <p className="mt-1.5 text-xs text-red-600">{verifyError}</p>
-                  ) : !verified ? (
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      Required to continue.
-                    </p>
-                  ) : null}
                 </div>
 
                 {/* County */}
