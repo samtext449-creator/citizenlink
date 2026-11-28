@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 export async function POST(req: Request) {
   try {
     // 1. INITIALIZE SUPABASE INSIDE THE REQUEST USING ANON KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
