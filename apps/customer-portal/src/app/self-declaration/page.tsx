@@ -69,6 +69,7 @@ export default function SelfDeclarationPage() {
   // Turnstile State
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<any>(null);
+  const pendingObligationResolver = useRef<((token: string | null) => void) | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -105,7 +106,9 @@ export default function SelfDeclarationPage() {
 
   async function handleVerify() {
     if (!turnstileToken) {
-      setVerifyError("Security check is initializing. Please wait a moment and try again.");
+      // Silently trigger a reset if the token is missing but we don't show an "initializing" message
+      turnstileRef.current?.reset();
+      setVerifyError("Verification service is temporarily unavailable. Please try again.");
       return;
     }
 
@@ -113,7 +116,7 @@ export default function SelfDeclarationPage() {
     setVerifyError("");
     
     try {
-      // 1. Fetch KRA PIN
+      // 1. Fetch KRA PIN using the first token
       const pinRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -142,13 +145,32 @@ export default function SelfDeclarationPage() {
         throw new Error(`The name on your KRA record (${kraTaxpayerName}) does not match the name on your account (${fullName}). Please contact support.`);
       }
 
-      // 3. Fetch Obligations
+      // 3. Generate a NEW token for the second request
+      // We reset the widget and wait for the onSuccess callback to give us a new token
+      const newToken = await new Promise<string | null>((resolve) => {
+        pendingObligationResolver.current = resolve;
+        turnstileRef.current?.reset();
+        
+        // Timeout after 5 seconds if no token is generated
+        setTimeout(() => {
+          if (pendingObligationResolver.current === resolve) {
+            pendingObligationResolver.current = null;
+            resolve(null);
+          }
+        }, 5000);
+      });
+
+      if (!newToken) {
+        throw new Error("Security check failed. Please try again.");
+      }
+
+      // 4. Fetch Obligations using the NEW token
       const obRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           kraPin: kraPin,
-          turnstileToken: turnstileToken
+          turnstileToken: newToken 
         }),
       });
 
@@ -158,7 +180,7 @@ export default function SelfDeclarationPage() {
         throw new Error(obData?.error?.message || "Could not fetch obligations for this PIN.");
       }
 
-      // 4. Map obligations
+      // 5. Map obligations
       const rawObligations = obData.data.obligations || [];
       const mappedObligations = rawObligations.map((ob: any) => {
         const name = (ob.name || '').toLowerCase();
@@ -170,7 +192,7 @@ export default function SelfDeclarationPage() {
         return ob.name;
       });
 
-      // 5. Success
+      // 6. Success
       setTaxInfo({
         kra_pin: kraPin,
         obligation_status: "Active", 
@@ -263,7 +285,16 @@ export default function SelfDeclarationPage() {
         <Turnstile
           ref={turnstileRef}
           siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-          onSuccess={(token) => setTurnstileToken(token)}
+          onSuccess={(token) => {
+            // If there's a pending promise waiting for a token (obligations request), resolve it
+            if (pendingObligationResolver.current) {
+              pendingObligationResolver.current(token);
+              pendingObligationResolver.current = null;
+            } else {
+              // Otherwise, set the general token for the initial verify
+              setTurnstileToken(token);
+            }
+          }}
           onExpire={() => setTurnstileToken(null)}
           options={{ 
             theme: 'light',
