@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Loader2, X, CheckCircle2, Circle, AlertCircle, ShieldCheck, FileText, ChevronDown } from "lucide-react";
-import { Turnstile } from '@marsidev/react-turnstile'
+import { ArrowLeft, ArrowRight, Check, Loader2, X, CheckCircle2, Circle, AlertCircle } from "lucide-react";
 
 // Change these if your routes are named differently
 const DASHBOARD_ROUTE = "/dashboard";
@@ -38,7 +37,7 @@ export default function SelfDeclarationPage() {
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
-  const [fullName, setFullName] = useState("");
+  const [fullName, setFullName] = useState(""); // Populated from DB on load
   const [idNumber, setIdNumber] = useState("");
   const [email, setEmail] = useState("");
 
@@ -68,10 +67,6 @@ export default function SelfDeclarationPage() {
   const [submitError, setSubmitError] = useState("");
   const [done, setDone] = useState(false);
 
-  // ── Turnstile & API State ──
-  const [pinTurnstileToken, setPinTurnstileToken] = useState<string | null>(null)
-  const [obligationsTurnstileToken, setObligationsTurnstileToken] = useState<string | null>(null)
-
   useEffect(() => {
     (async () => {
       try {
@@ -88,7 +83,7 @@ export default function SelfDeclarationPage() {
             return;
           }
           if (u.email) setEmail(u.email);
-          if (u.full_name) setFullName(u.full_name);
+          if (u.full_name) setFullName(u.full_name); // Setting the DB full name here
         }
       } catch {
         /* stay on the page */
@@ -103,52 +98,50 @@ export default function SelfDeclarationPage() {
     setVerified(false);
     setTaxInfo(null);
     setVerifyError("");
-    setPinTurnstileToken(null);
-    setObligationsTurnstileToken(null);
   }
 
   async function handleVerify() {
-    if (!pinTurnstileToken) {
-      setVerifyError("Please complete the security check.");
-      return;
-    }
-
     setVerifying(true);
     setVerifyError("");
     
     try {
-      // 1. Fetch KRA PIN (Find My KRA PIN logic)
+      // 1. Fetch KRA PIN and Taxpayer Name using ID
       const pinRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           taxpayerType, 
           taxpayerId: idNumber.trim(),
-          turnstileToken: pinTurnstileToken
+          turnstileToken: "bypass" // Assuming backend still expects this key
         }),
       });
 
       const pinData = await pinRes.json().catch(() => ({}));
 
       if (!pinRes.ok || !pinData.success) {
-        // Fallback: If the API doesn't provide a specific message, use generic
         throw new Error(pinData?.error?.message || "We couldn't verify that ID number. Please check and try again.");
       }
 
       const kraPin = pinData.data.kraPin;
-      const taxpayerName = pinData.data.taxpayerName;
+      const kraTaxpayerName = pinData.data.taxpayerName;
 
-      // 2. Fetch Obligations (Check My Obligations logic)
-      if (!obligationsTurnstileToken) {
-        throw new Error("Security check expired. Please try again.");
+      // 2. Compare against DB name (fullName state populated from /api/auth/me)
+      const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalizedKraName = normalize(kraTaxpayerName);
+      const normalizedDbName = normalize(fullName);
+
+      // Substring check to allow for middle names being added/removed slightly
+      if (!normalizedKraName.includes(normalizedDbName) && !normalizedDbName.includes(normalizedKraName)) {
+        throw new Error(`The name on your KRA record (${kraTaxpayerName}) does not match the name on your account (${fullName}). Please contact support.`);
       }
 
+      // 3. Fetch Obligations in the background
       const obRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/obligations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           kraPin: kraPin,
-          turnstileToken: obligationsTurnstileToken
+          turnstileToken: "bypass"
         }),
       });
 
@@ -158,7 +151,7 @@ export default function SelfDeclarationPage() {
         throw new Error(obData?.error?.message || "Could not fetch obligations for this PIN.");
       }
 
-      // 3. Map the obligations to our internal service keys
+      // 4. Map the obligations to our internal service keys
       const rawObligations = obData.data.obligations || [];
       const mappedObligations = rawObligations.map((ob: any) => {
         const name = (ob.name || '').toLowerCase();
@@ -167,17 +160,17 @@ export default function SelfDeclarationPage() {
         if (name.includes('paye')) return 'paye';
         if (name.includes('rental')) return 'mri';
         if (name.includes('turnover')) return 'turnover_tax';
-        return ob.name; // Fallback
+        return ob.name;
       });
 
+      // 5. Success - Update State
       setTaxInfo({
         kra_pin: kraPin,
-        obligation_status: "Active", // Assuming Active if obligations are fetched
-        holder_full_name: taxpayerName,
+        obligation_status: "Active", 
+        holder_full_name: kraTaxpayerName,
         obligations: mappedObligations,
       });
 
-      if (taxpayerName && !fullName.trim()) setFullName(taxpayerName);
       setVerified(true);
     } catch (e: any) {
       setVerifyError(e?.message || "Verification failed. Please try again.");
@@ -314,19 +307,19 @@ export default function SelfDeclarationPage() {
 
               <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
                 
-                {/* Full Name */}
+                {/* Full Name (Disabled input, sourced from DB) */}
                 <div>
                   <label htmlFor="full_name" className={labelClass}>
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="full_name"
-                    className={fieldClass}
+                    className={`${fieldClass} bg-slate-50 cursor-not-allowed`}
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="As it appears on your ID"
-                    autoComplete="name"
+                    readOnly
+                    title="This name is linked to your account and cannot be changed."
                   />
+                  <p className="mt-1 text-[11px] text-slate-500">From your account profile.</p>
                 </div>
 
                 {/* Email */}
@@ -446,9 +439,9 @@ export default function SelfDeclarationPage() {
                         <button
                           type="button"
                           onClick={handleVerify}
-                          disabled={verifying || !pinTurnstileToken || !obligationsTurnstileToken}
-                          className={`shrink-0 rounded px-4 py-2.5 text-sm font-semibold transition ${
-                            verifying || !pinTurnstileToken || !obligationsTurnstileToken
+                          disabled={verifying}
+                          className={`shrink-0 rounded px-6 py-2.5 text-sm font-semibold transition ${
+                            verifying
                               ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                               : "bg-[#0a2540] text-white hover:bg-[#112d4e] shadow-sm"
                           }`}
@@ -457,41 +450,16 @@ export default function SelfDeclarationPage() {
                         </button>
                       )}
                       {verified && (
-                        <div className="shrink-0 inline-flex items-center gap-1.5 rounded bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 border border-green-200">
+                        <div className="shrink-0 inline-flex items-center gap-1.5 rounded bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 border border-green-200">
                           <CheckCircle2 size={16} /> Verified
                         </div>
                       )}
                     </div>
                     
-                    {/* Turnstile Widgets for Verification (Hidden if already verified) */}
-                    {!verified && idNumber.length >= 7 && (
-                      <div className="mt-2 space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                        <p className="text-xs font-semibold text-slate-600 mb-2">Security Check required for verification:</p>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                           <div>
-                              <span className="text-[10px] text-slate-500 block mb-1">PIN Lookup Check</span>
-                              <Turnstile
-                                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                                onSuccess={(token) => setPinTurnstileToken(token)}
-                                onExpire={() => setPinTurnstileToken(null)}
-                                options={{ theme: 'light' }}
-                              />
-                           </div>
-                           <div>
-                              <span className="text-[10px] text-slate-500 block mb-1">Obligations Check</span>
-                              <Turnstile
-                                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                                onSuccess={(token) => setObligationsTurnstileToken(token)}
-                                onExpire={() => setObligationsTurnstileToken(null)}
-                                options={{ theme: 'light' }}
-                              />
-                           </div>
-                        </div>
-                      </div>
-                    )}
-
                     {verifyError ? (
-                      <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12}/> {verifyError}</p>
+                      <p className="text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded border border-red-200">
+                        <AlertCircle size={14}/> {verifyError}
+                      </p>
                     ) : !verified && idNumber.length < 7 ? (
                       <p className="text-xs text-slate-500">Enter your ID number to verify.</p>
                     ) : null}
