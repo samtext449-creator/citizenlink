@@ -41,8 +41,8 @@ import SubmissionsPage from "./Submissions";
 import LinkedAccountsPage from "./LinkedAccounts";
 import ProfilePage from "./Profile";
 import HelpSupportPage from "./HelpSupport";
-import SolaraAgent from "./SolaraAgent"; 
-import OnboardingTour from "../../components/OnboardingTour"; 
+import SolaraAgent from "./SolaraAgent";
+import OnboardingTour from "../../components/OnboardingTour";
 
 // --------------------------------------------------
 // Navigation configuration
@@ -117,12 +117,35 @@ function DashboardContent() {
   const [runTour, setRunTour] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  const rawStatus = user?.profile_status ?? "incomplete";
-  // Map 'completed' to 'pending_approval' so the UI shows the green banner
-  const profileStatus = rawStatus === "completed" ? "pending_approval" : rawStatus;
+  // Set by the self-declaration page right after a successful submit
+  const [justSubmitted, setJustSubmitted] = useState(false);
+  useEffect(() => {
+    setJustSubmitted(sessionStorage.getItem("taxflow_profile_submitted") === "1");
+  }, []);
+
+  // What the server says
+  const rawStatus = String(user?.profile_status ?? "incomplete").toLowerCase();
+  const serverStatus: "incomplete" | "pending_approval" | "approved" =
+    rawStatus === "approved"
+      ? "approved"
+      : ["pending", "pending_approval", "completed", "submitted"].includes(rawStatus)
+      ? "pending_approval"
+      : "incomplete";
+
+  // Right after a submit, show the approval message even if the server data is a moment behind
+  const profileStatus =
+    serverStatus === "incomplete" && justSubmitted ? "pending_approval" : serverStatus;
+
   const showProfileBanner = !!user && profileStatus !== "approved";
 
-  const WARNING_MS = 2 * 60 * 1000; 
+  // Clear the flag once the server has caught up
+  useEffect(() => {
+    if (user && serverStatus !== "incomplete") {
+      sessionStorage.removeItem("taxflow_profile_submitted");
+    }
+  }, [user, serverStatus]);
+
+  const WARNING_MS = 2 * 60 * 1000;
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [showExpiry, setShowExpiry] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -135,8 +158,8 @@ function DashboardContent() {
     let isMounted = true;
 
     const fetchUser = async () => {
-      if (isMounted) setIsLoading(true); 
-      
+      if (isMounted) setIsLoading(true);
+
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
 
@@ -163,15 +186,15 @@ function DashboardContent() {
     fetchUser();
 
     return () => {
-      isMounted = false; 
+      isMounted = false;
     };
-  }, [router, searchParams]); 
+  }, [router, searchParams]);
 
   // 2. Separate Effect to trigger the tour safely
   useEffect(() => {
     if (!isLoading && activePage === "Overview") {
       const hasSeenTour = localStorage.getItem("taxflow_tour_completed");
-      
+
       if (!hasSeenTour) {
         const timer = setTimeout(() => {
           setRunTour(true);
@@ -235,6 +258,7 @@ function DashboardContent() {
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {
+      sessionStorage.removeItem("taxflow_profile_submitted");
       router.replace("/login");
       router.refresh();
     }
@@ -367,13 +391,13 @@ function DashboardContent() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = activePage === item.name;
-              const tourId = `nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`;
+              const tourId = `nav-${item.name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
 
               return (
                 <button
                   key={item.name}
                   onClick={() => handleNavigation(item.name)}
-                  data-tour={tourId} 
+                  data-tour={tourId}
                   className={`
                     group flex w-full items-center gap-3 rounded-xl
                     px-3 py-3 text-sm font-medium transition-all
@@ -428,33 +452,33 @@ function DashboardContent() {
             role="alert"
             data-tour="profile-banner"
             className={`flex h-9 items-center justify-center gap-3 border-b px-4 ${
-              profileStatus === "pending_approval" || profileStatus === "pending"
-                ? "border-green-200 bg-green-50" 
+              profileStatus === "pending_approval"
+                ? "border-green-200 bg-green-50"
                 : "border-yellow-300 bg-yellow-100"
             }`}
           >
-            {profileStatus === "pending_approval" || profileStatus === "pending" ? (
-  <>
-    <CheckCircle2 size={17} className="shrink-0 text-green-700" />
-    <p className="truncate text-[13px] font-semibold text-green-900">
-      Your application is in the approval stage. Taxflow will approve it shortly.
-    </p>
-  </>
-) : (
-  <>
-    <AlertCircle size={17} className="shrink-0 text-yellow-700" />
-    <p className="truncate text-[13px] font-semibold text-yellow-900">
-      To start your journey of automation, complete your profile
-    </p>
-    <button
-      onClick={() => router.push("/self-declaration")}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
-    >
-      Complete Profile
-      <ArrowRight size={13} />
-    </button>
-  </>
-)}
+            {profileStatus === "pending_approval" ? (
+              <>
+                <CheckCircle2 size={17} className="shrink-0 text-green-700" />
+                <p className="truncate text-[13px] font-semibold text-green-900">
+                  Your application is in the approval stage. Taxflow will approve it shortly.
+                </p>
+              </>
+            ) : (
+              <>
+                <AlertCircle size={17} className="shrink-0 text-yellow-700" />
+                <p className="truncate text-[13px] font-semibold text-yellow-900">
+                  To start your journey of automation, complete your profile
+                </p>
+                <button
+                  onClick={() => router.push("/self-declaration")}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md bg-yellow-400 px-3 py-0.5 text-[13px] font-semibold text-yellow-950 transition hover:bg-yellow-500"
+                >
+                  Complete Profile
+                  <ArrowRight size={13} />
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -814,7 +838,7 @@ function DashboardHome({
         <p className="mt-1 text-xs text-slate-400">Common tasks in Taxflow</p>
 
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          
+
           <div data-tour="create-workflow">
             <QuickAction
               icon={Plus}

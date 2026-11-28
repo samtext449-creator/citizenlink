@@ -319,6 +319,8 @@ export default function SelfDeclarationPage() {
       if (!res.ok || !json.success) {
         throw new Error(json?.message || "We couldn't submit your profile.");
       }
+      // Lets the dashboard show "approval stage" straight away
+      sessionStorage.setItem("taxflow_profile_submitted", "1");
       setDone(true);
     } catch (e: any) {
       setSubmitError(e?.message || "Something went wrong. Please try again.");
