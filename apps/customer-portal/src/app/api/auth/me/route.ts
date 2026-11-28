@@ -9,7 +9,6 @@ const BACKEND_URL = process.env.AUTH_ENGINE_URL;
 // Reads the `exp` claim from a JWT WITHOUT verifying it.
 // Only used to tell the UI when to show the warning; the backend still
 // verifies the real token on every request.
-// NOTE: must NOT be exported, Next.js route files only allow GET/POST/etc.
 function decodeJwtExp(token: string | undefined | null): number | null {
   if (!token) return null;
   try {
@@ -34,7 +33,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const backendResponse = await fetch(`${BACKEND_URL}/v1/auth/me`, {
+    // We call the Taxflow-specific endpoint we just created
+    const backendResponse = await fetch(`${BACKEND_URL}/v1/auth/taxflow/me`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

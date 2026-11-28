@@ -105,7 +105,7 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // Used to detect URL changes to force a refetch
+  const searchParams = useSearchParams();
 
   const [activePage, setActivePage] = useState("Overview");
   const [collapsed, setCollapsed] = useState(false);
@@ -114,18 +114,12 @@ function DashboardContent() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- TOUR STATE ---
   const [runTour, setRunTour] = useState(false);
-
-  // Real User State
   const [user, setUser] = useState<any>(null);
 
   const profileStatus = user?.profile_status ?? "incomplete";
-  
-  // Show banner if profile is NOT approved
   const showProfileBanner = !!user && profileStatus !== "approved";
 
-  // Session expiry warning
   const WARNING_MS = 2 * 60 * 1000; 
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [showExpiry, setShowExpiry] = useState(false);
@@ -142,7 +136,6 @@ function DashboardContent() {
       if (isMounted) setIsLoading(true); 
       
       try {
-        // Force network fetch by passing cache: 'no-store'
         const res = await fetch("/api/auth/me", { cache: "no-store" });
 
         if (res.status === 401) {
@@ -170,7 +163,7 @@ function DashboardContent() {
     return () => {
       isMounted = false; 
     };
-  }, [router, searchParams]); // Re-run fetch if URL changes
+  }, [router, searchParams]); 
 
   // 2. Separate Effect to trigger the tour safely
   useEffect(() => {
@@ -262,7 +255,6 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#F7F9F8] text-slate-800">
-      {/* RENDER TOUR COMPONENT */}
       {!isLoading && <OnboardingTour run={runTour} onComplete={() => setRunTour(false)} />}
 
       {/* Session expiry pop-up */}
@@ -434,7 +426,6 @@ function DashboardContent() {
             role="alert"
             data-tour="profile-banner"
             className={`flex h-9 items-center justify-center gap-3 border-b px-4 ${
-              // CHANGED TO GREEN FOR PENDING APPROVAL
               profileStatus === "pending_approval" || profileStatus === "pending"
                 ? "border-green-200 bg-green-50" 
                 : "border-yellow-300 bg-yellow-100"
