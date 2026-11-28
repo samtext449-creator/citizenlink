@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
@@ -96,6 +96,14 @@ const submissions: any[] = [];
 // Main dashboard page
 // --------------------------------------------------
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams(); // Used to detect URL changes to force a refetch
 
@@ -131,7 +139,6 @@ export default function DashboardPage() {
     let isMounted = true;
 
     const fetchUser = async () => {
-      // Set loading state if we are refetching
       if (isMounted) setIsLoading(true); 
       
       try {
