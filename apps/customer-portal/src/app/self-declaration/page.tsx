@@ -37,8 +37,8 @@ export default function SelfDeclarationPage() {
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
-  const [fullName, setFullName] = useState(""); // Editable by user
-  const [dbFullName, setDbFullName] = useState(""); // Actual name from database, for comparison
+  const [fullName, setFullName] = useState(""); 
+  const [dbFullName, setDbFullName] = useState(""); 
   const [idNumber, setIdNumber] = useState("");
   const [email, setEmail] = useState("");
 
@@ -89,7 +89,6 @@ export default function SelfDeclarationPage() {
           }
           if (u.email) setEmail(u.email);
           
-          // Set the editable name (for user display and correction)
           let nameToSet = "";
           if (u.full_name) {
             nameToSet = u.full_name;
@@ -97,7 +96,7 @@ export default function SelfDeclarationPage() {
             nameToSet = `${u.first_name || ''} ${u.last_name || ''}`.trim();
           }
           setFullName(nameToSet);
-          setDbFullName(nameToSet); // Keep original for validation
+          setDbFullName(nameToSet); 
         }
       } catch {
         /* stay on the page */
@@ -135,7 +134,7 @@ export default function SelfDeclarationPage() {
             if (name.includes('paye')) return 'paye';
             if (name.includes('rental')) return 'mri';
             if (name.includes('turnover')) return 'turnover_tax';
-            return ob.name;
+            return ob.name; 
           });
 
           setTaxInfo({
@@ -168,32 +167,46 @@ export default function SelfDeclarationPage() {
   }
 
   async function handleVerify() {
-    if (!turnstileToken) {
-      turnstileRef.current?.reset();
-      setVerifyError("Verification service is temporarily unavailable. Please try again.");
-      return;
-    }
-
+    // 1. Immediately show the loading UI
     setVerifying(true);
     setVerifyError("");
 
-    // 1. Validate that the user hasn't changed the name from the DB name
-    const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (normalize(fullName) !== normalize(dbFullName)) {
-      setVerifyError("The Full Name does not match your account details. Please correct it or contact support.");
+    // 2. Wait for the Turnstile token silently if it's not ready yet
+    let tokenToUse = turnstileToken;
+    
+    if (!tokenToUse) {
+      // Create a promise that resolves when the onSuccess callback fires
+      tokenToUse = await new Promise<string | null>((resolve) => {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          // We are reading the ref directly to avoid stale closures
+          if (turnstileToken) {
+            clearInterval(interval);
+            resolve(turnstileToken);
+          } else if (attempts > 30) { // 3 seconds timeout
+            clearInterval(interval);
+            resolve(null);
+          }
+          attempts++;
+        }, 100);
+      });
+    }
+
+    if (!tokenToUse) {
+      setVerifyError("Verification service timed out. Please try again.");
       setVerifying(false);
+      turnstileRef.current?.reset();
       return;
     }
     
     try {
-      // 2. Fetch KRA PIN
       const pinRes = await fetch(`${XECOFLOW_PAY_BASE}/v1/kratax/pin/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           taxpayerType, 
           taxpayerId: idNumber.trim(),
-          turnstileToken: turnstileToken 
+          turnstileToken: tokenToUse 
         }),
       });
 
@@ -206,11 +219,12 @@ export default function SelfDeclarationPage() {
       const kraPin = pinData.data.kraPin;
       const kraTaxpayerName = pinData.data.taxpayerName;
 
-      // 3. Compare KRA name against the user's input (which matches DB)
+      // Compare KRA name against the user's account name
+      const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
       const normalizedKraName = normalize(kraTaxpayerName);
-      const normalizedInputName = normalize(fullName);
+      const normalizedDbName = normalize(fullName);
 
-      if (!normalizedKraName.includes(normalizedInputName) && !normalizedInputName.includes(normalizedKraName)) {
+      if (!normalizedKraName.includes(normalizedDbName) && !normalizedDbName.includes(normalizedKraName)) {
         throw new Error(`The name on your KRA record (${kraTaxpayerName}) does not match the name on your account (${fullName}). Please contact support.`);
       }
 
@@ -222,7 +236,7 @@ export default function SelfDeclarationPage() {
       setVerifyError(e?.message || "Verification failed. Please try again.");
       turnstileRef.current?.reset();
       setTurnstileToken(null);
-      setVerifying(false);
+      setVerifying(false); // Only turn off loading on failure. On success, the useEffect handles it.
     }
   }
 
@@ -245,6 +259,11 @@ export default function SelfDeclarationPage() {
   const eligible =
     !!selectedService && !!taxInfo?.obligations.includes(selectedService.obligation);
   const notEligible = !!selectedService && !eligible;
+
+  const formatObligation = (key: string) => {
+    const service = SERVICES.find(s => s.obligation === key);
+    return service ? service.obligationName : key;
+  };
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -294,7 +313,6 @@ export default function SelfDeclarationPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
       
-      {/* INVISIBLE TURNSTILE WIDGET */}
       <div className="hidden">
         <Turnstile
           ref={turnstileRef}
@@ -305,14 +323,12 @@ export default function SelfDeclarationPage() {
         />
       </div>
 
-      {/* Top Header Area */}
       <div className="bg-white border-b border-slate-200 px-6 py-5 sm:px-10 lg:px-16">
         <div className="mx-auto max-w-6xl">
           <h1 className="text-2xl font-bold text-slate-900">Profile Setup</h1>
         </div>
       </div>
 
-      {/* Steps Indicator Area */}
       <div className="bg-white border-b border-slate-200 px-6 sm:px-10 lg:px-16">
         <div className="mx-auto max-w-6xl flex">
           <div className={`flex items-center gap-2 py-4 px-4 border-b-2 text-sm font-medium transition-colors ${step === 1 ? "border-green-500 text-green-700 bg-green-50" : "border-transparent text-slate-500"}`}>
@@ -326,7 +342,6 @@ export default function SelfDeclarationPage() {
         </div>
       </div>
 
-      {/* Main Form Content */}
       <main className="mx-auto max-w-6xl px-6 py-10 sm:px-10 lg:px-16">
         <div className="bg-white border border-slate-200 p-6 sm:p-10 shadow-sm">
           
@@ -348,40 +363,35 @@ export default function SelfDeclarationPage() {
               <h2 className="text-xl font-semibold text-slate-900 mb-6">Profile Information</h2>
               <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
                 
-                {/* Full Name - NOW EDITABLE */}
                 <div>
                   <label htmlFor="full_name" className={labelClass}>
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="full_name"
-                    className={`${fieldClass}`}
+                    className={`${fieldClass} bg-slate-50 cursor-not-allowed`}
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="As it appears on your ID"
+                    readOnly
+                    title="This name is linked to your account."
                   />
                   <p className="mt-1 text-[11px] text-slate-500">Must match your KRA details.</p>
                 </div>
 
-                {/* Email */}
                 <div>
                   <label htmlFor="email" className={labelClass}>Email ID <span className="text-red-500">*</span></label>
                   <input id="email" type="email" className={fieldClass} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
                 </div>
 
-                {/* Phone */}
                 <div>
                   <label htmlFor="phone" className={labelClass}>Telephone Number <span className="text-red-500">*</span></label>
                   <input id="phone" type="tel" inputMode="tel" className={fieldClass} value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s]/g, ""))} placeholder="0712 345 678" autoComplete="tel" />
                 </div>
 
-                {/* Date of Birth */}
                 <div>
                   <label htmlFor="dob" className={labelClass}>Date of Birth <span className="text-red-500">*</span></label>
                   <input id="dob" type="date" className={fieldClass} value={dob} onChange={(e) => setDob(e.target.value)} />
                 </div>
 
-                {/* Taxpayer Type */}
                 <div>
                   <label htmlFor="taxpayer_type" className={labelClass}>Taxpayer Type <span className="text-red-500">*</span></label>
                   <select id="taxpayer_type" className={`${fieldClass} cursor-pointer`} value={taxpayerType} onChange={(e) => setTaxpayerType(e.target.value)}>
@@ -392,7 +402,6 @@ export default function SelfDeclarationPage() {
                   </select>
                 </div>
 
-                {/* Preferred Notification Channel */}
                 <div>
                   <label htmlFor="notification_channel" className={labelClass}>Preferred Notification Channel <span className="text-red-500">*</span></label>
                   <select id="notification_channel" className={`${fieldClass} cursor-pointer`} value={notificationChannel} onChange={(e) => setNotificationChannel(e.target.value)}>
@@ -401,30 +410,54 @@ export default function SelfDeclarationPage() {
                   </select>
                 </div>
 
-                {/* Emergency Contact */}
                 <div>
                   <label htmlFor="emergency_contact" className={labelClass}>Emergency Contact <span className="text-red-500">*</span></label>
                   <input id="emergency_contact" type="tel" inputMode="tel" className={fieldClass} value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value.replace(/[^\d+\s]/g, ""))} placeholder="0712 345 678" />
                 </div>
 
-                {/* ID Number & Verification */}
                 <div className="md:col-span-2">
                   <label htmlFor="id_number" className={labelClass}>ID Number <span className="text-red-500">*</span></label>
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                       <input id="id_number" inputMode="numeric" className={fieldClass} value={idNumber} onChange={(e) => handleIdChange(e.target.value)} placeholder="12345678" disabled={verifying || verified} />
+                      
                       {idNumber.length >= 7 && !verified && (
-                        <button type="button" onClick={handleVerify} disabled={verifying} className={`shrink-0 rounded px-6 py-2.5 text-sm font-semibold transition ${verifying ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" : "bg-[#0a2540] text-white hover:bg-[#112d4e] shadow-sm"}`}>
-                          {verifying ? <Loader2 size={16} className="animate-spin" /> : "Verify"}
+                        <button 
+                          type="button" 
+                          onClick={handleVerify} 
+                          disabled={verifying} 
+                          className={`shrink-0 rounded px-6 py-2.5 text-sm font-semibold transition ${
+                            verifying 
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" 
+                              : "bg-[#0a2540] text-white hover:bg-[#112d4e] shadow-sm"
+                          }`}
+                        >
+                          {verifying ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin mr-2 inline-block" /> 
+                              Checking...
+                            </>
+                          ) : (
+                            "Verify Identity"
+                          )}
                         </button>
                       )}
+                      
                       {verified && (
                         <div className="shrink-0 inline-flex items-center gap-1.5 rounded bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 border border-green-200">
                           <CheckCircle2 size={16} /> Verified
                         </div>
                       )}
                     </div>
-                    {verifyError ? (
+                    
+                    {/* Show this while verifying */}
+                    {verifying && (
+                      <p className="text-sm text-blue-600 flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-200">
+                         <Loader2 size={14} className="animate-spin" /> Performing identity security check, please wait...
+                      </p>
+                    )}
+
+                    {!verifying && verifyError ? (
                       <p className="text-sm text-red-600 flex items-center gap-1.5 bg-red-50 p-2 rounded border border-red-200"><AlertCircle size={14}/> {verifyError}</p>
                     ) : !verified && idNumber.length < 7 ? (
                       <p className="text-xs text-slate-500">Enter your ID number to verify.</p>
@@ -432,7 +465,6 @@ export default function SelfDeclarationPage() {
                   </div>
                 </div>
 
-                {/* Address Fields */}
                 <div><label htmlFor="county" className={labelClass}>County <span className="text-red-500">*</span></label><input id="county" className={fieldClass} value={county} onChange={(e) => setCounty(e.target.value)} placeholder="Nairobi" /></div>
                 <div><label htmlFor="sub_county" className={labelClass}>Sub-county <span className="text-red-500">*</span></label><input id="sub_county" className={fieldClass} value={subCounty} onChange={(e) => setSubCounty(e.target.value)} placeholder="Westlands" /></div>
                 <div><label htmlFor="building_name" className={labelClass}>Building Name <span className="text-red-500">*</span></label><input id="building_name" className={fieldClass} value={buildingName} onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Rift Plaza" /></div>
@@ -465,6 +497,22 @@ export default function SelfDeclarationPage() {
                     <Row label="ID Number" value={idNumber} />
                     <Row label="KRA PIN" value={taxInfo?.kra_pin || "—"} />
                     <Row label="PIN Holder" value={taxInfo?.holder_full_name || "—"} />
+                    
+                    <div className="flex flex-col px-4 py-3 gap-2">
+                      <dt className="text-sm font-medium text-slate-600">Active Obligations</dt>
+                      <dd className="flex flex-wrap gap-2">
+                        {taxInfo?.obligations && taxInfo.obligations.length > 0 ? (
+                          taxInfo.obligations.map((ob, i) => (
+                            <span key={i} className="inline-flex items-center rounded bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                              {formatObligation(ob)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-slate-500">None found</span>
+                        )}
+                      </dd>
+                    </div>
+
                     <div className="flex items-center justify-between px-4 py-3">
                       <dt className="text-sm font-medium text-slate-600">Obligation Status</dt>
                       <dd className={`flex items-center gap-2 text-sm font-semibold ${taxInfo?.obligation_status === "Active" ? "text-green-700" : "text-red-600"}`}>
@@ -480,10 +528,25 @@ export default function SelfDeclarationPage() {
                     <label htmlFor="service" className={labelClass}>Service you want to automate <span className="text-red-500">*</span></label>
                     <select id="service" value={serviceId} onChange={(e) => setServiceId(e.target.value)} className={`${fieldClass} cursor-pointer`}>
                       <option value="">Choose a service</option>
-                      {SERVICES.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                      {SERVICES.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} (Requires: {s.obligationName})
+                        </option>
+                      ))}
                     </select>
-                    {notEligible && selectedService && (<div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm leading-relaxed text-red-700">This PIN may not be eligible for {selectedService.name.toLowerCase()}. It isn't registered for the {selectedService.obligationName} obligation. Pick another service, or check your obligations on iTax.</div>)}
-                    {eligible && selectedService && (<p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={16} /> Your PIN is eligible for this service.</p>)}
+                    
+                    {notEligible && selectedService && (
+                      <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm leading-relaxed text-red-700">
+                        <strong>Ineligible:</strong> Your PIN is not registered for the <strong>{selectedService.obligationName}</strong> obligation. 
+                        You selected <em>{selectedService.name}</em>, which requires it. 
+                        Please pick another service or check your obligations on iTax.
+                      </div>
+                    )}
+                    {eligible && selectedService && (
+                      <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+                        <Check size={16} /> Your PIN is eligible for this service.
+                      </p>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t border-slate-100">
@@ -509,7 +572,6 @@ export default function SelfDeclarationPage() {
         </div>
       </main>
 
-      {/* Terms Modal */}
       {termsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div role="dialog" aria-modal="true" className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-2xl">
