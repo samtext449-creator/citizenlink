@@ -36,6 +36,9 @@ export default function SelfDeclarationPage() {
 
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  
+  // Add merchantId state
+  const [merchantId, setMerchantId] = useState<number | null>(null);
 
   const [fullName, setFullName] = useState(""); 
   const [dbFullName, setDbFullName] = useState(""); 
@@ -83,6 +86,9 @@ export default function SelfDeclarationPage() {
         const json = await res.json();
         const u = json?.data;
         if (u) {
+          // Store merchant_id for the submit payload
+          if (u.merchant_id) setMerchantId(u.merchant_id);
+          
           if (u.profile_status === "pending_approval" || u.profile_status === "approved") {
             router.replace(DASHBOARD_ROUTE);
             return;
@@ -167,23 +173,19 @@ export default function SelfDeclarationPage() {
   }
 
   async function handleVerify() {
-    // 1. Immediately show the loading UI
     setVerifying(true);
     setVerifyError("");
 
-    // 2. Wait for the Turnstile token silently if it's not ready yet
     let tokenToUse = turnstileToken;
     
     if (!tokenToUse) {
-      // Create a promise that resolves when the onSuccess callback fires
       tokenToUse = await new Promise<string | null>((resolve) => {
         let attempts = 0;
         const interval = setInterval(() => {
-          // We are reading the ref directly to avoid stale closures
           if (turnstileToken) {
             clearInterval(interval);
             resolve(turnstileToken);
-          } else if (attempts > 30) { // 3 seconds timeout
+          } else if (attempts > 30) { 
             clearInterval(interval);
             resolve(null);
           }
@@ -219,7 +221,6 @@ export default function SelfDeclarationPage() {
       const kraPin = pinData.data.kraPin;
       const kraTaxpayerName = pinData.data.taxpayerName;
 
-      // Compare KRA name against the user's account name
       const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
       const normalizedKraName = normalize(kraTaxpayerName);
       const normalizedDbName = normalize(fullName);
@@ -236,7 +237,7 @@ export default function SelfDeclarationPage() {
       setVerifyError(e?.message || "Verification failed. Please try again.");
       turnstileRef.current?.reset();
       setTurnstileToken(null);
-      setVerifying(false); // Only turn off loading on failure. On success, the useEffect handles it.
+      setVerifying(false);
     }
   }
 
@@ -273,6 +274,7 @@ export default function SelfDeclarationPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          merchant_id: merchantId, // Pass the integer ID here
           full_name: fullName,
           id_number: idNumber,
           email,
@@ -288,6 +290,11 @@ export default function SelfDeclarationPage() {
           phone,
           service: serviceId,
           terms_accepted: true,
+          // Include KRA data
+          kra_pin: taxInfo?.kra_pin,
+          kra_holder_name: taxInfo?.holder_full_name,
+          kra_status: taxInfo?.obligation_status,
+          obligations: taxInfo?.obligations,
         }),
       });
       const json = await res.json();
@@ -450,7 +457,6 @@ export default function SelfDeclarationPage() {
                       )}
                     </div>
                     
-                    {/* Show this while verifying */}
                     {verifying && (
                       <p className="text-sm text-blue-600 flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-200">
                          <Loader2 size={14} className="animate-spin" /> Performing identity security check, please wait...
