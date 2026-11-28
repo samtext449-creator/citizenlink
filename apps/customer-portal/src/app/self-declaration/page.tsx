@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Loader2, X } from "lucide-react";
-
+import { ArrowLeft, ArrowRight, Check, Loader2, X, CheckCircle2, Circle } from "lucide-react";
 
 // Change these if your routes are named differently
 const DASHBOARD_ROUTE = "/dashboard";
@@ -13,12 +12,9 @@ type TaxInfo = {
   kra_pin: string;
   obligation_status: "Active" | "Inactive";
   holder_full_name: string;
-  // Obligation keys registered on this PIN, e.g. ["income_tax", "vat"]
   obligations: string[];
 };
 
-// Services a user can automate, and the KRA obligation each one needs.
-// Add more here whenever you launch a new service.
 const SERVICES = [
   { id: "nil_return", name: "Nil return", obligation: "income_tax", obligationName: "Income Tax" },
   { id: "income_tax_return", name: "Income tax return", obligation: "income_tax", obligationName: "Income Tax" },
@@ -28,8 +24,6 @@ const SERVICES = [
   { id: "turnover_tax", name: "Turnover tax return", obligation: "turnover_tax", obligationName: "Turnover Tax" },
 ];
 
-// Test data. Typing this ID number returns a sample PIN so you can try the
-// flow before the real KRA lookup is connected. Remove when going live.
 const TEST_ID = "12345678";
 const TEST_RESULT = {
   full_name: "SAMUEL CHAGA",
@@ -39,10 +33,10 @@ const TEST_RESULT = {
   obligations: ["income_tax"],
 };
 
-// Flat, underline-style fields: no boxes, no cards
+// Updated to match the clean, bordered look from the reference image
 const fieldClass =
-  "w-full border-0 border-b border-slate-300 bg-transparent px-0 py-2.5 text-[15px] text-slate-900 placeholder-slate-400 outline-none transition focus:border-[#0B1B36] focus:ring-0 disabled:text-slate-500";
-const labelClass = "block text-sm text-slate-500";
+  "w-full rounded border border-slate-300 bg-white px-3 py-2.5 text-[15px] text-slate-900 placeholder-slate-400 outline-none transition focus:border-green-500 focus:ring-1 focus:ring-green-500 disabled:bg-slate-50 disabled:text-slate-500";
+const labelClass = "block text-sm font-medium text-slate-700 mb-1.5";
 
 export default function SelfDeclarationPage() {
   const router = useRouter();
@@ -74,7 +68,6 @@ export default function SelfDeclarationPage() {
   const [submitError, setSubmitError] = useState("");
   const [done, setDone] = useState(false);
 
-  // Make sure the user is signed in and still needs to complete the profile
   useEffect(() => {
     (async () => {
       try {
@@ -94,7 +87,7 @@ export default function SelfDeclarationPage() {
           if (u.full_name) setFullName(u.full_name);
         }
       } catch {
-        /* stay on the page; submit will surface any real problem */
+        /* stay on the page */
       } finally {
         setReady(true);
       }
@@ -113,15 +106,10 @@ export default function SelfDeclarationPage() {
     setVerifyError("");
     try {
       let d: any;
-
       if (idNumber === TEST_ID) {
-        // Sample data for testing
         await new Promise((r) => setTimeout(r, 700));
         d = TEST_RESULT;
       } else {
-        // TODO: connect to your KRA / ID lookup.
-        // Expected: { success: true, data: { full_name, kra_pin, obligation_status,
-        //             holder_full_name, obligations: ["income_tax", "vat", ...] } }
         const res = await fetch("/api/kra/verify-id", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -160,7 +148,6 @@ export default function SelfDeclarationPage() {
     zipCode.trim() !== "" &&
     phone.replace(/\D/g, "").length >= 9;
 
-  // Service eligibility: does this PIN have the obligation the service needs?
   const selectedService = SERVICES.find((s) => s.id === serviceId) || null;
   const eligible =
     !!selectedService && !!taxInfo?.obligations.includes(selectedService.obligation);
@@ -170,7 +157,6 @@ export default function SelfDeclarationPage() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      // TODO: backend should set profile_status = "pending_approval"
       const res = await fetch("/api/profile/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,71 +188,53 @@ export default function SelfDeclarationPage() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <Loader2 className="animate-spin text-slate-300" size={26} />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-slate-400" size={26} />
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-white font-sans text-slate-800 lg:flex">
-      {/* Left rail */}
-      <aside className="bg-[#0B1B36] px-6 py-6 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-[340px] lg:shrink-0 lg:flex-col lg:justify-between lg:px-10 lg:py-12">
-        <div>
-          <button
-            type="button"
-            onClick={() => router.push(DASHBOARD_ROUTE)}
-            className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-slate-300 transition hover:text-white"
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
+      {/* Top Header Area */}
+      <div className="bg-white border-b border-slate-200 px-6 py-5 sm:px-10 lg:px-16">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="text-2xl font-bold text-slate-900">Profile Setup</h1>
+        </div>
+      </div>
+
+      {/* Steps Indicator Area */}
+      <div className="bg-white border-b border-slate-200 px-6 sm:px-10 lg:px-16">
+        <div className="mx-auto max-w-6xl flex">
+          <div 
+            className={`flex items-center gap-2 py-4 px-4 border-b-2 text-sm font-medium transition-colors ${
+              step === 1 ? "border-green-500 text-green-700 bg-green-50" : "border-transparent text-slate-500"
+            }`}
           >
-            <ArrowLeft size={16} />
-            Back to dashboard
-          </button>
-
-          <p className={`font-serif text-2xl font-semibold`}>
-            Taxflow<span className="text-blue-400">.</span>
-          </p>
-
-          <div className="mt-8 hidden lg:block">
-            <h1 className={`font-serif text-[34px] font-medium leading-tight`}>
-              Let's get your tax profile set up.
-            </h1>
-            <p className="mt-4 max-w-[26ch] text-[15px] leading-relaxed text-slate-300">
-              Just a few quick details and you'll be ready to start automating your
-              tax filings.
-            </p>
+            {step > 1 ? <CheckCircle2 size={18} className="text-green-500" /> : <Circle size={18} />}
+            Personal Details
+          </div>
+          <div 
+            className={`flex items-center gap-2 py-4 px-4 border-b-2 text-sm font-medium transition-colors ${
+              step === 2 ? "border-green-500 text-green-700 bg-green-50" : "border-transparent text-slate-500"
+            }`}
+          >
+            {done ? <CheckCircle2 size={18} className="text-green-500" /> : <Circle size={18} />}
+            Tax Details
           </div>
         </div>
+      </div>
 
-        <div className="mt-5 flex gap-6 text-sm lg:mt-0 lg:block lg:space-y-3">
-          <p className={step === 1 ? "font-semibold text-white" : "text-slate-400"}>
-            1. About you
-          </p>
-          <p className={step === 2 ? "font-semibold text-white" : "text-slate-400"}>
-            2. Tax details
-          </p>
-        </div>
-      </aside>
-
-      {/* Form */}
-      <main className="flex-1 px-6 py-10 sm:px-12 lg:px-20 lg:py-16">
-        <div className="mx-auto max-w-xl">
-          {!done && step === 2 && (
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              disabled={submitting}
-              className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
-            >
-              <ArrowLeft size={16} />
-              Back
-            </button>
-          )}
+      {/* Main Form Content */}
+      <main className="mx-auto max-w-6xl px-6 py-10 sm:px-10 lg:px-16">
+        <div className="bg-white border border-slate-200 p-6 sm:p-10 shadow-sm">
+          
           {done ? (
-            <div className="pt-8">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-700">
-                <Check size={22} />
+            <div className="max-w-2xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700 mb-6">
+                <Check size={24} />
               </div>
-              <h2 className={`font-serif mt-6 text-3xl font-medium text-slate-900`}>
+              <h2 className="text-2xl font-semibold text-slate-900">
                 Thanks, we've got your details.
               </h2>
               <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
@@ -275,7 +243,7 @@ export default function SelfDeclarationPage() {
               </p>
               <button
                 onClick={() => router.replace(DASHBOARD_ROUTE)}
-                className="mt-8 inline-flex items-center gap-2 rounded-lg bg-[#0B1B36] px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="mt-8 inline-flex items-center gap-2 rounded bg-green-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
               >
                 Go to dashboard
                 <ArrowRight size={16} />
@@ -283,14 +251,16 @@ export default function SelfDeclarationPage() {
             </div>
           ) : step === 1 ? (
             <div>
-              <h2 className={`font-serif text-3xl font-medium text-slate-900`}>
-                First, tell us about you
+              <h2 className="text-xl font-semibold text-slate-900 mb-6">
+                Profile Information
               </h2>
 
-              <div className="mt-10 space-y-8">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
+                
+                {/* Full Name */}
                 <div>
                   <label htmlFor="full_name" className={labelClass}>
-                    Full name
+                    Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="full_name"
@@ -302,56 +272,26 @@ export default function SelfDeclarationPage() {
                   />
                 </div>
 
+                {/* Email */}
                 <div>
-                  <label htmlFor="id_number" className={labelClass}>
-                    ID number
+                  <label htmlFor="email" className={labelClass}>
+                    Email ID <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex items-end gap-4">
-                    <input
-                      id="id_number"
-                      inputMode="numeric"
-                      className={fieldClass}
-                      value={idNumber}
-                      onChange={(e) => handleIdChange(e.target.value)}
-                      placeholder="12345678"
-                    />
-                    {idNumber.length >= 7 && (
-                      <button
-                        type="button"
-                        onClick={handleVerify}
-                        disabled={verifying || verified}
-                        className={`mb-2 shrink-0 text-sm font-semibold ${
-                          verified
-                            ? "inline-flex items-center gap-1 text-green-700"
-                            : "text-blue-700 underline underline-offset-4 hover:text-blue-900 disabled:opacity-60"
-                        }`}
-                      >
-                        {verifying ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Loader2 size={14} className="animate-spin" /> Checking…
-                          </span>
-                        ) : verified ? (
-                          <>
-                            <Check size={15} /> Verified
-                          </>
-                        ) : (
-                          "Verify"
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  {verifyError ? (
-                    <p className="mt-2 text-sm text-red-600">{verifyError}</p>
-                  ) : !verified ? (
-                    <p className="mt-2 text-sm text-slate-400">
-                      You'll need to verify your ID before you can continue.
-                    </p>
-                  ) : null}
+                  <input
+                    id="email"
+                    type="email"
+                    className={fieldClass}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                  />
                 </div>
 
+                {/* Phone */}
                 <div>
                   <label htmlFor="phone" className={labelClass}>
-                    Telephone number
+                    Telephone Number <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="phone"
@@ -365,203 +305,290 @@ export default function SelfDeclarationPage() {
                   />
                 </div>
 
+                {/* ID Number */}
                 <div>
-                  <label htmlFor="email" className={labelClass}>
-                    Email address
+                  <label htmlFor="id_number" className={labelClass}>
+                    ID Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="email"
-                    type="email"
-                    className={fieldClass}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    autoComplete="email"
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="id_number"
+                      inputMode="numeric"
+                      className={fieldClass}
+                      value={idNumber}
+                      onChange={(e) => handleIdChange(e.target.value)}
+                      placeholder="12345678"
+                    />
+                    {idNumber.length >= 7 && (
+                      <button
+                        type="button"
+                        onClick={handleVerify}
+                        disabled={verifying || verified}
+                        className={`shrink-0 rounded px-3 py-2.5 text-sm font-semibold transition ${
+                          verified
+                            ? "bg-green-50 text-green-700 border border-green-200"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 disabled:opacity-60"
+                        }`}
+                      >
+                        {verifying ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : verified ? (
+                          <Check size={16} />
+                        ) : (
+                          "Verify"
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  {verifyError ? (
+                    <p className="mt-1.5 text-xs text-red-600">{verifyError}</p>
+                  ) : !verified ? (
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      Required to continue.
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* County */}
+                <div>
+                  <label htmlFor="county" className={labelClass}>
+                    County <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="county" 
+                    className={fieldClass} 
+                    value={county}
+                    onChange={(e) => setCounty(e.target.value)} 
+                    placeholder="Nairobi" 
+                  />
+                </div>
+
+                {/* Sub-county */}
+                <div>
+                  <label htmlFor="sub_county" className={labelClass}>
+                    Sub-county <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="sub_county" 
+                    className={fieldClass} 
+                    value={subCounty}
+                    onChange={(e) => setSubCounty(e.target.value)} 
+                    placeholder="Westlands" 
+                  />
+                </div>
+
+                {/* Building Name */}
+                <div>
+                  <label htmlFor="building_name" className={labelClass}>
+                    Building Name <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="building_name" 
+                    className={fieldClass} 
+                    value={buildingName}
+                    onChange={(e) => setBuildingName(e.target.value)} 
+                    placeholder="e.g. Rift Plaza" 
+                  />
+                </div>
+
+                {/* P.O. Box */}
+                <div>
+                  <label htmlFor="po_box" className={labelClass}>
+                    P.O. Box <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="po_box" 
+                    className={fieldClass} 
+                    value={poBox}
+                    onChange={(e) => setPoBox(e.target.value)} 
+                    placeholder="12345" 
+                  />
+                </div>
+
+                {/* Zip Code */}
+                <div>
+                  <label htmlFor="zip_code" className={labelClass}>
+                    Zip Code <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="zip_code" 
+                    className={fieldClass} 
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)} 
+                    placeholder="00100" 
                   />
                 </div>
               </div>
 
-              <h3 className={`font-serif mt-14 text-2xl font-medium text-slate-900`}>
-                Where do you live?
-              </h3>
-
-              <div className="mt-8 grid gap-x-8 gap-y-8 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="county" className={labelClass}>County</label>
-                  <input id="county" className={fieldClass} value={county}
-                    onChange={(e) => setCounty(e.target.value)} placeholder="Nairobi" />
-                </div>
-                <div>
-                  <label htmlFor="sub_county" className={labelClass}>Sub-county</label>
-                  <input id="sub_county" className={fieldClass} value={subCounty}
-                    onChange={(e) => setSubCounty(e.target.value)} placeholder="Westlands" />
-                </div>
-                <div>
-                  <label htmlFor="po_box" className={labelClass}>P.O. Box</label>
-                  <input id="po_box" className={fieldClass} value={poBox}
-                    onChange={(e) => setPoBox(e.target.value)} placeholder="12345" />
-                </div>
-                <div>
-                  <label htmlFor="zip_code" className={labelClass}>Zip code</label>
-                  <input id="zip_code" className={fieldClass} value={zipCode}
-                    onChange={(e) => setZipCode(e.target.value)} placeholder="00100" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label htmlFor="building_name" className={labelClass}>Building name</label>
-                  <input id="building_name" className={fieldClass} value={buildingName}
-                    onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g. Rift Plaza" />
-                </div>
-              </div>
-
-              <div className="mt-12 flex items-center justify-between gap-4">
-                <p className="text-sm text-slate-400">
+              <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-6">
+                <p className="text-sm text-slate-500">
                   {!verified
-                    ? "Verify your ID to move on."
+                    ? "Please verify your ID number to proceed."
                     : !step1Ready
-                    ? "A few fields are still empty."
+                    ? "Please fill in all required fields."
                     : ""}
                 </p>
                 <button
                   type="button"
                   onClick={() => setStep(2)}
                   disabled={!step1Ready}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#0B1B36] px-7 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="inline-flex items-center gap-2 rounded bg-green-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Next
+                  CONTINUE
                   <ArrowRight size={16} />
                 </button>
               </div>
             </div>
           ) : (
             <div>
-              <h2 className={`font-serif text-3xl font-medium text-slate-900`}>
-                Your tax details
-              </h2>
-              <p className="mt-3 text-[15px] text-slate-500">
-                These are filled in for you and can't be changed here.
-              </p>
-
-              <dl className="mt-10 divide-y divide-slate-200 border-y border-slate-200">
-                <Row label="ID number" value={idNumber} />
-                <Row label="KRA PIN" value={taxInfo?.kra_pin || "—"} />
-                <Row label="PIN holder" value={taxInfo?.holder_full_name || "—"} />
-                <div className="flex items-center justify-between py-4">
-                  <dt className="text-sm text-slate-500">Obligation</dt>
-                  <dd
-                    className={`flex items-center gap-2 text-[15px] font-semibold ${
-                      taxInfo?.obligation_status === "Active"
-                        ? "text-green-700"
-                        : "text-red-600"
-                    }`}
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        taxInfo?.obligation_status === "Active"
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      }`}
-                    />
-                    {taxInfo?.obligation_status || "—"}
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="mt-10">
-                <label htmlFor="service" className={labelClass}>
-                  Service you want to automate
-                </label>
-                <select
-                  id="service"
-                  value={serviceId}
-                  onChange={(e) => setServiceId(e.target.value)}
-                  className={`${fieldClass} cursor-pointer`}
-                >
-                  <option value="">Choose a service</option>
-                  {SERVICES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-
-                {notEligible && selectedService && (
-                  <p className="mt-3 text-sm leading-relaxed text-red-600">
-                    This PIN may not be eligible for {selectedService.name.toLowerCase()}.
-                    It isn't registered for the {selectedService.obligationName} obligation.
-                    Pick another service, or check your obligations on iTax.
-                  </p>
-                )}
-                {eligible && selectedService && (
-                  <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
-                    <Check size={15} /> Your PIN can use this service.
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-10">
-                <label className="flex cursor-pointer items-start gap-3 text-[15px] leading-relaxed text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={termsAccepted}
-                    onChange={(e) => setTermsAccepted(e.target.checked)}
-                    className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-[#0B1B36] focus:ring-[#0B1B36]"
-                  />
-                  <span>
-                    I have read and agree to the{" "}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setTermsOpen(true);
-                      }}
-                      className="font-semibold text-blue-700 underline underline-offset-4 hover:text-blue-900"
-                    >
-                      terms and conditions
-                    </button>
-                    .
-                  </span>
-                </label>
-              </div>
-
-              {submitError && <p className="mt-6 text-sm text-red-600">{submitError}</p>}
-
-              <div className="mt-10 flex items-center justify-end">
+              <div className="flex items-center gap-4 mb-6">
                 <button
                   type="button"
-                  onClick={handleSubmit}
-                  disabled={!eligible || !termsAccepted || submitting}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-7 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-35"
+                  onClick={() => setStep(1)}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
                 >
-                  {submitting && <Loader2 size={16} className="animate-spin" />}
-                  {submitting ? "Submitting…" : "Submit"}
+                  <ArrowLeft size={16} />
+                  Back
                 </button>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Your Tax Details
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                {/* Left Column - Read Only Data */}
+                <div>
+                  <p className="text-sm text-slate-500 mb-4">
+                    These details are pulled directly from KRA and cannot be changed here.
+                  </p>
+                  <dl className="divide-y divide-slate-200 border border-slate-200 rounded bg-slate-50">
+                    <Row label="ID Number" value={idNumber} />
+                    <Row label="KRA PIN" value={taxInfo?.kra_pin || "—"} />
+                    <Row label="PIN Holder" value={taxInfo?.holder_full_name || "—"} />
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <dt className="text-sm font-medium text-slate-600">Obligation Status</dt>
+                      <dd
+                        className={`flex items-center gap-2 text-sm font-semibold ${
+                          taxInfo?.obligation_status === "Active"
+                            ? "text-green-700"
+                            : "text-red-600"
+                        }`}
+                      >
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            taxInfo?.obligation_status === "Active"
+                              ? "bg-green-500"
+                              : "bg-red-500"
+                          }`}
+                        />
+                        {taxInfo?.obligation_status || "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Right Column - Form Input */}
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="service" className={labelClass}>
+                      Service you want to automate <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="service"
+                      value={serviceId}
+                      onChange={(e) => setServiceId(e.target.value)}
+                      className={`${fieldClass} cursor-pointer`}
+                    >
+                      <option value="">Choose a service</option>
+                      {SERVICES.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {notEligible && selectedService && (
+                      <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm leading-relaxed text-red-700">
+                        This PIN may not be eligible for {selectedService.name.toLowerCase()}.
+                        It isn't registered for the {selectedService.obligationName} obligation.
+                        Pick another service, or check your obligations on iTax.
+                      </div>
+                    )}
+                    {eligible && selectedService && (
+                      <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+                        <Check size={16} /> Your PIN is eligible for this service.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <label className="flex cursor-pointer items-start gap-3 text-[15px] leading-relaxed text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-green-600 focus:ring-green-500"
+                      />
+                      <span>
+                        I have read and agree to the{" "}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setTermsOpen(true);
+                          }}
+                          className="font-semibold text-green-700 underline underline-offset-4 hover:text-green-800"
+                        >
+                          terms and conditions
+                        </button>
+                        .
+                      </span>
+                    </label>
+                  </div>
+
+                  {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+
+                  <div className="flex justify-end pt-4">
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={!eligible || !termsAccepted || submitting}
+                      className="inline-flex items-center gap-2 rounded bg-green-600 px-8 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submitting && <Loader2 size={16} className="animate-spin" />}
+                      {submitting ? "SUBMITTING…" : "CONTINUE"}
+                      {!submitting && <ArrowRight size={16} />}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </div>
       </main>
 
+      {/* Terms Modal */}
       {termsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             role="dialog"
             aria-modal="true"
-            className="flex max-h-[85vh] w-full max-w-lg flex-col bg-white shadow-2xl"
+            className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-2xl"
           >
-            <div className="flex items-center justify-between px-6 pt-6">
-              <h2 className={`font-serif text-2xl font-medium text-slate-900`}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">
                 Terms and conditions
               </h2>
               <button
                 onClick={() => setTermsOpen(false)}
                 aria-label="Close"
-                className="p-1 text-slate-400 hover:text-slate-700"
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* TODO: replace with your real legal text */}
             <div className="space-y-4 overflow-y-auto px-6 py-5 text-[15px] leading-relaxed text-slate-600">
               <p>
                 By submitting this profile, you confirm that the details you gave are
@@ -585,18 +612,18 @@ export default function SelfDeclarationPage() {
             <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
                 onClick={() => setTermsOpen(false)}
-                className="px-4 py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-900"
+                className="rounded bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200"
               >
-                Cancel
+                CANCEL
               </button>
               <button
                 onClick={() => {
                   setTermsAccepted(true);
                   setTermsOpen(false);
                 }}
-                className="rounded-lg bg-[#0B1B36] px-6 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                className="rounded bg-green-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
               >
-                I agree
+                I AGREE
               </button>
             </div>
           </div>
@@ -608,9 +635,9 @@ export default function SelfDeclarationPage() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-4">
-      <dt className="text-sm text-slate-500">{label}</dt>
-      <dd className="text-[15px] font-semibold text-slate-900">{value}</dd>
+    <div className="flex items-center justify-between px-4 py-3">
+      <dt className="text-sm font-medium text-slate-600">{label}</dt>
+      <dd className="text-sm font-semibold text-slate-900">{value}</dd>
     </div>
   );
 }
