@@ -48,6 +48,12 @@ export default function SelfDeclarationPage() {
   const [idNumber, setIdNumber] = useState("");
   const [email, setEmail] = useState("");
 
+  // New Fields
+  const [dob, setDob] = useState("");
+  const [taxpayerType, setTaxpayerType] = useState("individual");
+  const [notificationChannel, setNotificationChannel] = useState("email");
+  const [emergencyContact, setEmergencyContact] = useState("");
+
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
   const [verifyError, setVerifyError] = useState("");
@@ -141,6 +147,10 @@ export default function SelfDeclarationPage() {
     verified &&
     fullName.trim() !== "" &&
     /^\S+@\S+\.\S+$/.test(email) &&
+    dob !== "" &&
+    taxpayerType !== "" &&
+    notificationChannel !== "" &&
+    emergencyContact.trim() !== "" &&
     county.trim() !== "" &&
     subCounty.trim() !== "" &&
     buildingName.trim() !== "" &&
@@ -164,6 +174,10 @@ export default function SelfDeclarationPage() {
           full_name: fullName,
           id_number: idNumber,
           email,
+          date_of_birth: dob,
+          taxpayer_type: taxpayerType,
+          notification_channel: notificationChannel,
+          emergency_contact: emergencyContact,
           county,
           sub_county: subCounty,
           building_name: buildingName,
@@ -302,6 +316,69 @@ export default function SelfDeclarationPage() {
                     onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s]/g, ""))}
                     placeholder="0712 345 678"
                     autoComplete="tel"
+                  />
+                </div>
+
+                {/* Date of Birth */}
+                <div>
+                  <label htmlFor="dob" className={labelClass}>
+                    Date of Birth <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="dob"
+                    type="date"
+                    className={fieldClass}
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                  />
+                </div>
+
+                {/* Taxpayer Type */}
+                <div>
+                  <label htmlFor="taxpayer_type" className={labelClass}>
+                    Taxpayer Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="taxpayer_type"
+                    className={`${fieldClass} cursor-pointer`}
+                    value={taxpayerType}
+                    onChange={(e) => setTaxpayerType(e.target.value)}
+                  >
+                    <option value="individual">Individual</option>
+                    <option value="sole_proprietor">Sole Proprietor</option>
+                    <option value="company">Company</option>
+                  </select>
+                </div>
+
+                {/* Preferred Notification Channel */}
+                <div>
+                  <label htmlFor="notification_channel" className={labelClass}>
+                    Preferred Notification Channel <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="notification_channel"
+                    className={`${fieldClass} cursor-pointer`}
+                    value={notificationChannel}
+                    onChange={(e) => setNotificationChannel(e.target.value)}
+                  >
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                  </select>
+                </div>
+
+                {/* Emergency Contact (NEW) */}
+                <div>
+                  <label htmlFor="emergency_contact" className={labelClass}>
+                    Emergency Contact <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="emergency_contact"
+                    type="tel"
+                    inputMode="tel"
+                    className={fieldClass}
+                    value={emergencyContact}
+                    onChange={(e) => setEmergencyContact(e.target.value.replace(/[^\d+\s]/g, ""))}
+                    placeholder="0712 345 678"
                   />
                 </div>
 
